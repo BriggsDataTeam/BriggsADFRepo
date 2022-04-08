@@ -1,0 +1,13 @@
+{
+	"name": "DS_BriggsAX",
+	"properties": {
+		"linkedServiceName": {
+			"referenceName": "LS_Briggs_AX",
+			"type": "LinkedServiceReference"
+		},
+		"annotations": [],
+		"type": "SqlServerTable",
+		"schema": []
+	},
+	"type": "Microsoft.Synapse/workspaces/datasets"
+}

@@ -1,0 +1,17 @@
+{
+	"name": "SQL script 1",
+	"properties": {
+		"content": {
+			"query": "DECLARE @json NVARCHAR(Max)\nDECLARE @countColumns int = 35;\nDECLARE @query VARCHAR(max) = 'CREATE  EXTERNAL TABLE _______ ( '\n\nSET @json = N'[{\"name\": \"VendorNumber\",\"type\": \"Int32\"},{\"name\": \"VendorName\",\"type\": \"String\"},{\"name\": \"Address1\",\"type\": \"String\"},{\"name\": \"Address2\",\"type\": \"String\"},{\"name\": \"CityState\",\"type\": \"String\"},{\"name\": \"Zip\",\"type\": \"String\"},{\"name\": \"Phone\",\"type\": \"String\"},{\"name\": \"Fax\",\"type\": \"String\"},{\"name\": \"WebAddress\",\"type\": \"String\"},{\"name\": \"Contact1\",\"type\": \"String\"},{\"name\": \"Contact1Phone\",\"type\": \"String\"},{\"name\": \"Contact1Email\",\"type\": \"String\"},{\"name\": \"Contact2\",\"type\": \"String\"},{\"name\": \"Contact2Phone\",\"type\": \"String\"},{\"name\": \"Contact2Email\",\"type\": \"String\"},{\"name\": \"AccountNumber\",\"type\": \"String\"},{\"name\": \"Terms\",\"type\": \"String\"},{\"name\": \"MinimumOrder\",\"type\": \"Decimal\"},{\"name\": \"YearToDate\",\"type\": \"Decimal\"},{\"name\": \"LifeToDate\",\"type\": \"Decimal\"},{\"name\": \"LastYear\",\"type\": \"Decimal\"},{\"name\": \"Products\",\"type\": \"String\"},{\"name\": \"Inactive\",\"type\": \"Boolean\"},{\"name\": \"Notes\",\"type\": \"String\"},{\"name\": \"SubrentalVendor\",\"type\": \"Boolean\"},{\"name\": \"GLLink\",\"type\": \"String\"},{\"name\": \"PaymentMethod\",\"type\": \"Int32\"},{\"name\": \"POApprovalOverride\",\"type\": \"Decimal\"},{\"name\": \"CurrencyNumber\",\"type\": \"Int32\"},{\"name\": \"Language\",\"type\": \"Int32\"},{\"name\": \"POPrintout\",\"type\": \"String\"},{\"name\": \"TaxCode\",\"type\": \"Int32\"},{\"name\": \"AccountingVendorId\",\"type\": \"Int32\"},{\"name\": \"TermDays\",\"type\": \"Int32\"},{\"name\": \"CountryCode\",\"type\": \"Int32\"}]'\n\nDECLARE @i int = 0\nDECLARE @row varchar(5)\nDECLARE @colName varchar(100)\nDECLARE @dataType VARCHAR(100)\nDECLARE @loopQuery VARCHAR(max)\nDECLARE @name VARCHAR(20) = '$.name'\nDECLARE @type VARCHAR(20) = '$.type'\n\nWHILE @i < @countColumns\nBEGIN\n    SET @i = @i + 1;\n\n    SET @row = concat('$[', @i ,']')\n    \n    select \n        @colName = name, \n        @dataType = CASE\n                WHEN type in ('Int32', 'Int64')  THEN 'INT'\n                WHEN type = 'String' THEN 'VARCHAR(MAX)'\n                WHEN type = 'Boolean' THEN 'BIT'\n                ELSE type\n                 \n            END\n\n    from openjson(@JSON, @row )\n    with (\n        name varchar(100) '$.name',\n        type varchar(100) '$.type'\n    )\n    \n    SET @query = @query + ' ' + @colName + ' ' + @dataType + ', '\n    --PRINT concat('@colName ', @colName, ' @dataType ', @dataType)\n\nEND\n\nSET @query = LEFT(@query , LEN(@query) - 1)\nSET @query = @query + ');'\nprint(@query)",
+			"metadata": {
+				"language": "sql"
+			},
+			"currentConnection": {
+				"databaseName": "master",
+				"poolName": "Built-in"
+			},
+			"resultLimit": 5000
+		},
+		"type": "SqlQuery"
+	}
+}

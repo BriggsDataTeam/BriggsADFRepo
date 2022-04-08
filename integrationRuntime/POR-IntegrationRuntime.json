@@ -1,0 +1,6 @@
+{
+	"name": "POR-IntegrationRuntime",
+	"properties": {
+		"type": "SelfHosted"
+	}
+}

@@ -1,0 +1,13 @@
+{
+	"name": "Briggs_MST",
+	"properties": {
+		"linkedServiceName": {
+			"referenceName": "LS_Briggs_MST",
+			"type": "LinkedServiceReference"
+		},
+		"annotations": [],
+		"type": "SqlServerTable",
+		"schema": []
+	},
+	"type": "Microsoft.Synapse/workspaces/datasets"
+}

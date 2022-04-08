@@ -1,0 +1,260 @@
+{
+	"name": "PL_Briggs_Heavy_Table_Load",
+	"properties": {
+		"activities": [
+			{
+				"name": "Lookup2_Full",
+				"type": "Lookup",
+				"dependsOn": [
+					{
+						"activity": "PL_SCALE_AZURE_SQL_DW500",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"policy": {
+					"timeout": "7.00:00:00",
+					"retry": 0,
+					"retryIntervalInSeconds": 30,
+					"secureOutput": false,
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"source": {
+						"type": "AzureSqlSource",
+						"sqlReaderQuery": "select id ID_Full from dbo.control_table where sourcetablename in (\n'XAP_INVOICESCHEDULELINE',\n'XAP_SVCREPORTINGTABLE',\n'DIMENSIONATTRIBUTEVALUE',\n'DIMENSIONATTRIBUTEVALUECOMBINATION',\n'DIMENSIONATTRIBUTEVALUEGROUPCOMBINATION',\n'ECORESPRODUCTTRANSLATION',\n'XAP_NPRITEM',\n'DIMENSIONATTRIBUTELEVELVALUE'\n)",
+						"queryTimeout": "02:00:00",
+						"partitionOption": "None"
+					},
+					"dataset": {
+						"referenceName": "Briggs_MDW",
+						"type": "DatasetReference",
+						"parameters": {
+							"schema_name": "dbo",
+							"table_name": "user"
+						}
+					},
+					"firstRowOnly": false
+				}
+			},
+			{
+				"name": "ForEach_Full_Load",
+				"type": "ForEach",
+				"dependsOn": [
+					{
+						"activity": "Lookup2_Full",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"userProperties": [],
+				"typeProperties": {
+					"items": {
+						"value": "@activity('Lookup2_Full').output.value",
+						"type": "Expression"
+					},
+					"batchCount": 2,
+					"activities": [
+						{
+							"name": "Lookup_Full",
+							"type": "Lookup",
+							"dependsOn": [],
+							"policy": {
+								"timeout": "7.00:00:00",
+								"retry": 0,
+								"retryIntervalInSeconds": 30,
+								"secureOutput": false,
+								"secureInput": false
+							},
+							"userProperties": [],
+							"typeProperties": {
+								"source": {
+									"type": "AzureSqlSource",
+									"sqlReaderQuery": {
+										"value": "@concat('select SourceQuery=''select '' +columnList+ '' from ''+ sourceDB+''.''+SourceSchemaName+''.''+SourcetableName\n,SourceDB\n,TargetContainer\n, TargetPath, TargetFile, FileFormat,DateField,LastDate,targetstagetableschema,targetstagetablename\nfrom dbo.control_table\nwhere ID= ',item().ID_Full)",
+										"type": "Expression"
+									},
+									"queryTimeout": "02:00:00",
+									"partitionOption": "None"
+								},
+								"dataset": {
+									"referenceName": "Briggs_MDW",
+									"type": "DatasetReference",
+									"parameters": {
+										"schema_name": "dbo",
+										"table_name": "user"
+									}
+								}
+							}
+						},
+						{
+							"name": "Copy_BriggsMST_ADLS_copy1",
+							"type": "Copy",
+							"dependsOn": [
+								{
+									"activity": "Lookup_Full",
+									"dependencyConditions": [
+										"Succeeded"
+									]
+								}
+							],
+							"policy": {
+								"timeout": "7.00:00:00",
+								"retry": 0,
+								"retryIntervalInSeconds": 30,
+								"secureOutput": false,
+								"secureInput": false
+							},
+							"userProperties": [],
+							"typeProperties": {
+								"source": {
+									"type": "SqlServerSource",
+									"sqlReaderQuery": {
+										"value": "@activity('Lookup_Full').output.firstRow.SourceQuery\n",
+										"type": "Expression"
+									},
+									"queryTimeout": "02:00:00",
+									"partitionOption": "None"
+								},
+								"sink": {
+									"type": "AzureSqlSink",
+									"preCopyScript": {
+										"value": "@{concat('truncate table ',activity('Lookup_Full').output.firstRow.TargetStageTableSchema,'.',activity('Lookup_Full').output.firstRow.TargetStageTableName)}",
+										"type": "Expression"
+									},
+									"disableMetricsCollection": false
+								},
+								"enableStaging": false,
+								"translator": {
+									"type": "TabularTranslator",
+									"typeConversion": true,
+									"typeConversionSettings": {
+										"allowDataTruncation": true,
+										"treatBooleanAsNumber": false
+									}
+								}
+							},
+							"inputs": [
+								{
+									"referenceName": "DS_Briggs_MST",
+									"type": "DatasetReference"
+								}
+							],
+							"outputs": [
+								{
+									"referenceName": "Briggs_MDW",
+									"type": "DatasetReference",
+									"parameters": {
+										"schema_name": {
+											"value": "@activity('Lookup_Full').output.firstRow.TargetStageTableSchema",
+											"type": "Expression"
+										},
+										"table_name": {
+											"value": "@activity('Lookup_Full').output.firstRow.TargetStageTableName",
+											"type": "Expression"
+										}
+									}
+								}
+							]
+						}
+					]
+				}
+			},
+			{
+				"name": "ForEach_Proc_Full",
+				"type": "ForEach",
+				"dependsOn": [
+					{
+						"activity": "ForEach_Full_Load",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"userProperties": [],
+				"typeProperties": {
+					"items": {
+						"value": "@activity('Lookup2_Full').output.value",
+						"type": "Expression"
+					},
+					"activities": [
+						{
+							"name": "Stored procedure_Full",
+							"type": "SqlServerStoredProcedure",
+							"dependsOn": [],
+							"policy": {
+								"timeout": "7.00:00:00",
+								"retry": 0,
+								"retryIntervalInSeconds": 30,
+								"secureOutput": false,
+								"secureInput": false
+							},
+							"userProperties": [],
+							"typeProperties": {
+								"storedProcedureName": "[dbo].[USP_Control_Table_LastDate]",
+								"storedProcedureParameters": {
+									"id_I_F": {
+										"value": {
+											"value": "@item().ID_Full",
+											"type": "Expression"
+										},
+										"type": "Int32"
+									}
+								}
+							},
+							"linkedServiceName": {
+								"referenceName": "DS_MDW_SP",
+								"type": "LinkedServiceReference"
+							}
+						}
+					]
+				}
+			},
+			{
+				"name": "PL_SCALE_AZURE_SQL_DW500",
+				"type": "ExecutePipeline",
+				"dependsOn": [],
+				"userProperties": [],
+				"typeProperties": {
+					"pipeline": {
+						"referenceName": "PL_SCALE_AZURE_SQL_DW",
+						"type": "PipelineReference"
+					},
+					"waitOnCompletion": true
+				}
+			},
+			{
+				"name": "PL_SCALE_AZURE_SQL_DW100",
+				"type": "ExecutePipeline",
+				"dependsOn": [
+					{
+						"activity": "ForEach_Proc_Full",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"userProperties": [],
+				"typeProperties": {
+					"pipeline": {
+						"referenceName": "PL_SCALE_AZURE_SQL_DW",
+						"type": "PipelineReference"
+					},
+					"waitOnCompletion": true,
+					"parameters": {
+						"PerformanceLevel": "DW100c"
+					}
+				}
+			}
+		],
+		"folder": {
+			"name": "Briggs Data Load in Azure DataLake"
+		},
+		"annotations": [],
+		"lastPublishTime": "2022-03-21T06:12:40Z"
+	},
+	"type": "Microsoft.Synapse/workspaces/pipelines"
+}

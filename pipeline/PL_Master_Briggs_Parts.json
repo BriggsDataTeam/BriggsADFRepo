@@ -1,0 +1,1582 @@
+{
+	"name": "PL_Master_Briggs_Parts",
+	"properties": {
+		"activities": [
+			{
+				"name": "Execute Pipeline1",
+				"type": "ExecutePipeline",
+				"dependsOn": [],
+				"userProperties": [],
+				"typeProperties": {
+					"pipeline": {
+						"referenceName": "PL_Generic_Copy_Parts",
+						"type": "PipelineReference"
+					},
+					"waitOnCompletion": true
+				}
+			},
+			{
+				"name": "ReportStageProc",
+				"type": "Lookup",
+				"dependsOn": [
+					{
+						"activity": "Execute Pipeline1",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"policy": {
+					"timeout": "7.00:00:00",
+					"retry": 0,
+					"retryIntervalInSeconds": 30,
+					"secureOutput": false,
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"source": {
+						"type": "AzureSqlSource",
+						"sqlReaderQuery": "select  * from dbo.control_table where processsequence = 2 and enableaction = 1 \nand subjectarea='Report Stage Part SP'\norder by id",
+						"queryTimeout": "02:00:00",
+						"partitionOption": "None"
+					},
+					"dataset": {
+						"referenceName": "Briggs_MDW",
+						"type": "DatasetReference",
+						"parameters": {
+							"schema_name": "dbo",
+							"table_name": "user"
+						}
+					},
+					"firstRowOnly": false
+				}
+			},
+			{
+				"name": "ForEach_Stage",
+				"type": "ForEach",
+				"dependsOn": [
+					{
+						"activity": "ReportStageProc",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"userProperties": [],
+				"typeProperties": {
+					"items": {
+						"value": "@activity('ReportStageProc').output.value",
+						"type": "Expression"
+					},
+					"activities": [
+						{
+							"name": "Stored procedure1",
+							"type": "SqlServerStoredProcedure",
+							"dependsOn": [],
+							"policy": {
+								"timeout": "7.00:00:00",
+								"retry": 0,
+								"retryIntervalInSeconds": 30,
+								"secureOutput": false,
+								"secureInput": false
+							},
+							"userProperties": [],
+							"typeProperties": {
+								"storedProcedureName": {
+									"value": "@item().sourcetablename",
+									"type": "Expression"
+								}
+							},
+							"linkedServiceName": {
+								"referenceName": "DS_MDW_SP",
+								"type": "LinkedServiceReference"
+							}
+						}
+					]
+				}
+			},
+			{
+				"name": "ReportFactProc",
+				"type": "Lookup",
+				"dependsOn": [
+					{
+						"activity": "ForEach_Stage",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					},
+					{
+						"activity": "Stage_Parts_Sold_Margin_Cost_Of_Goods",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					},
+					{
+						"activity": "Stage_Part_Fill_Rate",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					},
+					{
+						"activity": "Stage_Parts_LCM_Year_End_Inventory",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"policy": {
+					"timeout": "7.00:00:00",
+					"retry": 0,
+					"retryIntervalInSeconds": 30,
+					"secureOutput": false,
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"source": {
+						"type": "AzureSqlSource",
+						"sqlReaderQuery": "select  * from dbo.control_table where processsequence = 4 and enableaction = 1 \nand subjectarea='Report Fact Part SP'\norder by id",
+						"queryTimeout": "02:00:00",
+						"partitionOption": "None"
+					},
+					"dataset": {
+						"referenceName": "Briggs_MDW",
+						"type": "DatasetReference",
+						"parameters": {
+							"schema_name": "dbo",
+							"table_name": "user"
+						}
+					},
+					"firstRowOnly": false
+				}
+			},
+			{
+				"name": "ForEach_Fact",
+				"type": "ForEach",
+				"dependsOn": [
+					{
+						"activity": "ReportFactProc",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"userProperties": [],
+				"typeProperties": {
+					"items": {
+						"value": "@activity('ReportFactProc').output.value",
+						"type": "Expression"
+					},
+					"batchCount": 5,
+					"activities": [
+						{
+							"name": "Stored procedure",
+							"type": "SqlServerStoredProcedure",
+							"dependsOn": [],
+							"policy": {
+								"timeout": "7.00:00:00",
+								"retry": 0,
+								"retryIntervalInSeconds": 30,
+								"secureOutput": false,
+								"secureInput": false
+							},
+							"userProperties": [],
+							"typeProperties": {
+								"storedProcedureName": {
+									"value": "@item().sourcetablename",
+									"type": "Expression"
+								}
+							},
+							"linkedServiceName": {
+								"referenceName": "DS_MDW_SP",
+								"type": "LinkedServiceReference"
+							}
+						}
+					]
+				}
+			},
+			{
+				"name": "Stage_Parts_LCM_Year_End_Inventory",
+				"type": "Copy",
+				"dependsOn": [],
+				"policy": {
+					"timeout": "7.00:00:00",
+					"retry": 0,
+					"retryIntervalInSeconds": 30,
+					"secureOutput": false,
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"source": {
+						"type": "SqlServerSource",
+						"sqlReaderQuery": "\n--declare @cte_poprice table ( itemid varchar(30), recid varchar(30))\n--declare @cte_popricewhs table ( itemid varchar(30), warehouse varchar(20), recid varchar(30))\n--declare @cte_recipetdate table ( itemid  varchar(30), reciptdate date, warehouse varchar(30))\n--declare @cte_lasttransdate table ( itemid  varchar(30), warehouse varchar(30), transdate date)\n--declare @cte_lasttransdatecounting table ( itemid  varchar(30), warehouse varchar(30), transdate date)\n\n\n\n with  cte_poprice as (\n    select pl.itemid itemid, \n            max ( pl.recid ) recid\n        from purchline pl\n   -- inner join salesline sl\n     --       on sl.salesid = pl.inventrefid\n        where pl.purchstatus in (2,3) \n\t\t\t--and sl.salesstatus in (2,3) \n    group by pl.itemid \n )\n\n, cte_popricewhs as (\n    select pl.itemid itemid,\n\t\t\tid.inventlocationid warehouse,\n            max ( pl.recid ) recid\n        from purchline pl\n\t\tleft join inventdim id on id.inventdimid = pl.inventdimid\n   -- inner join salesline sl\n     --       on sl.salesid = pl.inventrefid\n        where pl.purchstatus in (2,3) \n\t\t\t--and sl.salesstatus in (2,3) \n    group by pl.itemid ,id.inventlocationid\n),\ncte_recipetdate as (\n   select pl.itemid,\n               max ( vps.deliverydate ) reciptdate,\n               id.inventlocationid warehouse\n          from [briggs_mst].dbo.purchline pl\n     left join [briggs_mst].dbo.vendpackingsliptrans vps\n            on vps.origpurchid = pl.purchid\n           and pl.inventtransid = vps.inventtransid\n     left join [briggs_mst].dbo.inventdim id\n            on id.inventdimid = vps.inventdimid\n         where pl.purchstatus in (2,3)\n      group by pl.itemid,\n               id.inventlocationid \n )\n--insert into @cte_lastsaledate\n-- select it.itemid,\n--              id.inventlocationid,\n--              max ( it.recid )\n--         from [briggs_mst].dbo.inventtrans it\n--    left join [briggs_mst].dbo.inventdim id\n--           on it.inventdimid = id.inventdimid\n--    left join [briggs_mst].dbo.inventtransorigin ito\n--           on it.inventtransorigin = ito.recid\n--        where it.statusissue <> 0\n--          and ito.referencecategory = 0   \n--     group by it.itemid,\n--              id.inventlocationid \n,cte_lasttransdate  as (\nselect it.itemid itemid,\n              id.inventlocationid warehouse,\n              max ( it.datephysical ) transdate\n         from [briggs_mst].dbo.inventtrans it\n    left join [briggs_mst].dbo.inventdim id\n           on it.inventdimid = id.inventdimid\n    left join [briggs_mst].dbo.inventtransorigin ito\n           on it.inventtransorigin = ito.recid\n        where ( it.statusissue <> 0 or it.statusreceipt <> 0 )\n          and ito.referencecategory not in (5, 6, 13)\n     group by it.itemid,\n              id.inventlocationid\n ),\ncte_lasttransdatecounting   as (\nselect it.itemid itemid,\n              id.inventlocationid warehouse,\n              min ( it.datephysical ) transdate\n         from [briggs_mst].dbo.inventtrans it\n    left join [briggs_mst].dbo.inventdim id\n           on it.inventdimid = id.inventdimid\n    left join [briggs_mst].dbo.inventtransorigin ito\n           on it.inventtransorigin = ito.recid\n        where ( it.statusissue <> 0 or it.statusreceipt <> 0 )\n     group by it.itemid,\n              id.inventlocationid \n )\n\n\nselect distinct\nreplace ( invtable.itemid, char(13), '' ) 'item_id',\nreplace ( replace ( replace ( eco.NAME, char(10), '' ),\n                                        char(13), '' ),\n                                        char(9),  '' ) 'name',\ninvdim.inventsiteid invent_site_id,\ninvdim.inventlocationid invent_location_id,\ninvdim.wmslocationid wms_location_id,\ncast ( isnull ( ( ( invsum.postedqty  +\n                    invsum.received   -\n                    invsum.deducted   +\n                    invsum.registered -\n                    invsum.picked       ) ), 0 )\n       as decimal(10,2) ) 'avail_phys',\ncast ( invMod.price as decimal(10,2) ) 'cost',\ncast ( ( ( invsum.POSTEDQTY  +\n           invsum.RECEIVED   -\n           invsum.DEDUCTED   +\n           invsum.REGISTERED -\n           invsum.PICKED       ) ) * invMod.price\n       as decimal(10,2) ) 'extended_cost',\ninvLoc.cellid cell_id,\ncast ( invsum.RESERVPHYSICAL as int ) 'reserv_physical',\nsos.sos,\ncase\n     when invloc.WMSLOCATIONIDDEFAULTISSUE = invdim.WMSLOCATIONID\n          then 'Yes'\n          else invloc.WMSLOCATIONIDDEFAULTISSUE\n end 'default_bin',\n[Briggs_MST].[dbo].[ENUM2STR]\n             ( 'XAP_StockedStatus', invLoc.STOCKEDSTATUS ) 'stocked_status',\nddv.displayvalue display_value,\nisnull ( npritem2.RETURNABLE, 1 ) 'returnable',\ninvloc.calcminimum calc_minimum,\ninvloc.calcmaximum calc_maximum,\nisnull ( case\n \n              when purprice.purchprice is not null\n               and purprice.purchprice > 0\n               and nprprice1.price     is not null\n               and nprprice1.price     > 0   \n               and invmod.price        is not null\n               and invmod.price        > 0     \n               and nprprice1.price     <= invmod.price\n               and purprice.purchprice <= nprprice1.price\n              then cast ( purprice.purchprice as decimal(10,2) )\n \n              when purprice.purchprice is not null\n               and purprice.purchprice > 0   \n               and nprprice1.price     is not null\n               and nprprice1.price     > 0    \n               and invmod.price        is not null\n               and invmod.price        > 0   \n               and nprprice1.price     <= invmod.price\n               and nprprice1.price     <= purprice.purchprice\n              then cast ( nprprice1.price as decimal(10,2) )\n \n              when purprice.purchprice is not null\n               and purprice.purchprice > 0    \n               and nprprice1.price     is not null\n               and nprprice1.price     > 0   \n               and invmod.price        is not null\n               and invmod.price        > 0     \n               and invmod.price        <= nprprice1.price\n               and purprice.purchprice <= invmod.price\n              then cast ( purprice.purchprice as decimal(10,2) )\n \n              when purprice.purchprice is not null\n               and purprice.purchprice > 0       \n               and nprprice1.price     is not null\n               and nprprice1.price     > 0     \n               and invmod.price        is not null\n               and invmod.price        > 0      \n               and invmod.price        <= nprprice1.price\n               and invmod.price        <= purprice.purchprice\n              then cast ( invmod.price as decimal(10,2) )\n \n              when purprice.purchprice is not null\n               and purprice.purchprice > 0    \n               and nprprice1.price     is not null\n               and nprprice1.price     > 0     \n               and isnull ( invmod.price, 0 ) = 0     \n               and purprice.purchprice <= nprprice1.price\n              then cast ( purprice.purchprice as decimal(10,2) )\n \n              when purprice.purchprice is not null\n               and purprice.purchprice > 0    \n               and nprprice1.price     is not null\n               and nprprice1.price     > 0    \n               and isnull ( invmod.price, 0 ) = 0   \n               and nprprice1.price     <= purprice.purchprice\n              then cast ( nprprice1.price as decimal(10,2) )\n \n              when purprice.purchprice is not null\n               and purprice.purchprice > 0   \n               and isnull ( nprprice1.price, 0 ) = 0  \n               and invmod.price        is not null\n               and invmod.price        > 0   \n               and purprice.purchprice <= invmod.price\n              then cast ( purprice.purchprice as decimal(10,2) )\n \n \n              when purprice.purchprice is not null\n               and purprice.purchprice > 0    \n               and isnull ( nprprice1.price, 0 ) = 0    \n               and invmod.price        is not null\n               and invmod.price        > 0    \n               and invmod.price        <= purprice.purchprice\n              then cast ( invmod.price as decimal(10,2) )\n \n              when purprice.purchprice is not null\n               and purprice.purchprice > 0       \n               and isnull ( nprprice1.price, 0 ) = 0   \n               and isnull ( invmod.price,    0 ) = 0    \n              then cast ( purprice.purchprice as decimal(10,2) )\n \n              when isnull ( purprice.purchprice, 0 ) = 0   \n               and nprprice1.price is not null\n               and nprprice1.price > 0     \n               and invmod.price    is not null\n               and invmod.price    > 0     \n               and nprprice1.price <= invmod.price\n              then cast ( nprprice1.price as decimal(10,2) )\n \n              when isnull ( purprice.purchprice, 0 ) = 0  \n               and nprprice1.price is not null\n               and nprprice1.price > 0     \n               and invmod.price    is not null\n               and invmod.price    > 0     \n               and invmod.price    <= nprprice1.price\n              then cast ( invmod.price as decimal(10,2) )\n \n              when isnull ( purprice.purchprice, 0 ) = 0  \n               and nprprice1.price is not null\n               and nprprice1.price > 0     \n               and isnull ( invmod.price,        0 ) = 0  \n              then cast ( nprprice1.price as decimal(10,2) )\n \n              when isnull ( purprice.purchprice, 0 ) = 0  \n               and isnull ( nprprice1.price,     0 ) = 0  \n               and invmod.price is not null\n               and invmod.price > 0    \n              then cast ( invmod.price as decimal(10,2) )\n \n              when isnull ( purprice.purchprice, 0 ) = 0  \n               and isnull ( nprprice1.price,     0 ) = 0   \n               and isnull ( invmod.price,        0 ) = 0   \n               and invmod2.price is not null\n               and invmod2.price > 0    \n              then cast ( invmod2.price as decimal(10,2) )\n \n         end, 0 ) 'price_used',\ncast ( isnull ( nprPrice1.PRICE,     0 ) as decimal(10,2) ) 'dealer_net_price',\ncast ( isnull ( invMod2.PRICE,       0 ) as decimal(10,2) ) 'manage_cost_price',\ncast ( isnull ( purPrice.PURCHPRICE, 0 ) as decimal(10,2) ) 'purch_price',\ncase\n     when ltd.transdate is null or ltd.transdate = dateadd ( day, 0, 0 )\n          then case\n                    when ltd2.transdate = dateadd ( day, 0, 0 )\n                         then null else ltd2.transdate\n                end\n          else ltd.transdate\n end 'trans_date',\ncte_RecipetDate.reciptdate receipt_date,\n--case\n--     when ittt.DATEPHYSICAL = dateadd ( day, 0, 0 )\n--          then null else ittt.DATEPHYSICAL\n-- end 'Last Sale Date',\ninvsum.closed\n \nfrom       [briggs_mst].dbo.inventtable invtable  \ninner join [briggs_mst].dbo.inventsum invsum\n        on invtable.itemid = invsum.itemid\ninner join [briggs_mst].dbo.inventdim invdim\n        on invdim.inventdimid = invsum.inventdimid\ninner join [briggs_mst].dbo.inventtablemodule invmod   \n        on invmod.itemid = invtable.itemid\n       and invmod.moduletype = 1 and invmod.dataareaid = 'BRG'\ninner join [briggs_mst].dbo.inventtablemodule invmod2     \n        on invmod2.itemid = invtable.itemid\n       and invmod2.moduletype = 0 and invmod2.dataareaid = 'BRG'\nleft join [briggs_mst].dbo.inventitemlocation invloc\n\t\t\t\t\t\t\t\t\t\t\t\ton invloc.itemid = invtable.itemid\n\t\t\t\t\t\t\t\t\t\t\t   and invloc.countgroupid = invdim.inventlocationid\n\t\t\t\t\t\t\t\t\t\t\t\tand isnull(invloc.inventdimid,'') <> 'AllBlank'\ninner join [briggs_mst].dbo.xap_npritem npritem\n        on npritem.product = invtable.product\n       and npritem.itemdataareaid = 'brg'\nleft join [briggs_mst].dbo.xap_npritem npritem2\n        on npritem2.product = invtable.product\n       and npritem2.itemdataareaid = 'dat'\ninner join [briggs_mst].dbo.xap_sourceofsupply sos\n        on sos.recid = npritem.sosrecid\nleft join [briggs_mst].dbo.ecoresproducttranslation eco\n        on eco.product = invtable.product\ninner join [briggs_mst].dbo.inventmodelgroupitem imgi\n        on imgi.itemid = invtable.itemid\n       and imgi.itemdataareaid = 'brg'\ninner join [briggs_mst].dbo.inventmodelgroup img\n        on imgi.modelgroupid = img.modelgroupid\nleft join [briggs_mst].dbo.inventlocation il\n        on il.inventlocationid = invdim.inventlocationid\nleft join [briggs_mst].dbo.defaultdimensionview ddv\n        on ddv.defaultdimension = il.defaultdimension and ddv.dimensionattributeid = 5637145333\nleft join cte_poprice ctepo\n        on ctepo.itemid = invtable.itemid\n\nleft join [briggs_mst].dbo.xap_nprprice nprprice1 \n        on nprprice1.itemid = invtable.itemid\n       and nprprice1.itemdataareaid = 'brg'\n       and nprprice1.moduletype =1\n       and nprprice1.validto > getdate()\n--left join [briggs_mst].dbo.xap_nprprice nprprice2   \n--        on nprprice2.itemid = invtable.itemid\n--       and nprprice2.itemdataareaid = 'brg'\n--       and nprprice2.moduletype = 2\n--       and nprprice2.validto > getdate()\nleft join cte_recipetdate cte_recipetdate\n        on cte_recipetdate.itemid = invtable.itemid\n       and cte_recipetdate.warehouse = invdim.inventlocationid\n--left join @cte_lastsaledate cte_lastsaledate\n--        on cte_lastsaledate.itemid = invtable.itemid\n--       and cte_lastsaledate.warehouse = invdim.inventlocationid\n--left join [briggs_mst].dbo.inventtrans ittt\n--        on ittt.recid = cte_lastsaledate.recid\nleft join cte_lasttransdate ltd\n        on ltd.itemid = invtable.itemid\n       and ltd.warehouse = invdim.inventlocationid \nleft join cte_lasttransdatecounting ltd2\n        on ltd2.itemid = invtable.itemid\n       and ltd2.warehouse = invdim.inventlocationid \nleft join cte_popricewhs ctepow on ctepow.itemid = invtable.itemid and ctepow.warehouse = invdim.inventlocationid\nleft join purchline purprice        \n        on purprice.recid = case when invdim.inventsiteid = 'Parts' then ctepow.recid else ctepo.recid end\nwhere img.stockedproduct = 1\n  and invdim.inventsiteid in ( 'PARTS', 'VAN', 'CON' )\n  and invdim.wmslocationid <> ''\n  and  invsum.closed = 0\n  and sos.sos not in ( 'HYSWARR', 'YALEWARR' )\n  and nprprice1.currencycode <> ''",
+						"queryTimeout": "02:00:00",
+						"partitionOption": "None"
+					},
+					"sink": {
+						"type": "AzureSqlSink",
+						"preCopyScript": "truncate table briggs.Stage_Parts_LCM_Year_End_Inventory",
+						"disableMetricsCollection": false
+					},
+					"enableStaging": false,
+					"translator": {
+						"type": "TabularTranslator",
+						"mappings": [
+							{
+								"source": {
+									"name": "item_id",
+									"type": "String",
+									"physicalType": "nvarchar"
+								},
+								"sink": {
+									"name": "item_id",
+									"type": "String",
+									"physicalType": "nvarchar"
+								}
+							},
+							{
+								"source": {
+									"name": "name",
+									"type": "String",
+									"physicalType": "nvarchar"
+								},
+								"sink": {
+									"name": "name",
+									"type": "String",
+									"physicalType": "nvarchar"
+								}
+							},
+							{
+								"source": {
+									"name": "invent_site_id",
+									"type": "String",
+									"physicalType": "nvarchar"
+								},
+								"sink": {
+									"name": "invent_site_id",
+									"type": "String",
+									"physicalType": "nvarchar"
+								}
+							},
+							{
+								"source": {
+									"name": "invent_location_id",
+									"type": "String",
+									"physicalType": "nvarchar"
+								},
+								"sink": {
+									"name": "invent_location_id",
+									"type": "String",
+									"physicalType": "nvarchar"
+								}
+							},
+							{
+								"source": {
+									"name": "wms_location_id",
+									"type": "String",
+									"physicalType": "nvarchar"
+								},
+								"sink": {
+									"name": "wms_location_id",
+									"type": "String",
+									"physicalType": "nvarchar"
+								}
+							},
+							{
+								"source": {
+									"name": "avail_phys",
+									"type": "Decimal",
+									"physicalType": "decimal",
+									"scale": 2,
+									"precision": 10
+								},
+								"sink": {
+									"name": "avail_phys",
+									"type": "Decimal",
+									"physicalType": "decimal",
+									"scale": 2,
+									"precision": 10
+								}
+							},
+							{
+								"source": {
+									"name": "cost",
+									"type": "Decimal",
+									"physicalType": "decimal",
+									"scale": 2,
+									"precision": 10
+								},
+								"sink": {
+									"name": "cost",
+									"type": "Decimal",
+									"physicalType": "decimal",
+									"scale": 2,
+									"precision": 10
+								}
+							},
+							{
+								"source": {
+									"name": "extended_cost",
+									"type": "Decimal",
+									"physicalType": "decimal",
+									"scale": 2,
+									"precision": 10
+								},
+								"sink": {
+									"name": "extended_cost",
+									"type": "Decimal",
+									"physicalType": "decimal",
+									"scale": 2,
+									"precision": 10
+								}
+							},
+							{
+								"source": {
+									"name": "cell_id",
+									"type": "String",
+									"physicalType": "nvarchar"
+								},
+								"sink": {
+									"name": "cell_id",
+									"type": "String",
+									"physicalType": "nvarchar"
+								}
+							},
+							{
+								"source": {
+									"name": "reserv_physical",
+									"type": "Int32",
+									"physicalType": "int"
+								},
+								"sink": {
+									"name": "reserv_physical",
+									"type": "Int32",
+									"physicalType": "int"
+								}
+							},
+							{
+								"source": {
+									"name": "sos",
+									"type": "String",
+									"physicalType": "nvarchar"
+								},
+								"sink": {
+									"name": "sos",
+									"type": "String",
+									"physicalType": "nvarchar"
+								}
+							},
+							{
+								"source": {
+									"name": "default_bin",
+									"type": "String",
+									"physicalType": "nvarchar"
+								},
+								"sink": {
+									"name": "default_bin",
+									"type": "String",
+									"physicalType": "nvarchar"
+								}
+							},
+							{
+								"source": {
+									"name": "stocked_status",
+									"type": "String",
+									"physicalType": "varchar"
+								},
+								"sink": {
+									"name": "stocked_status",
+									"type": "String",
+									"physicalType": "varchar"
+								}
+							},
+							{
+								"source": {
+									"name": "display_value",
+									"type": "String",
+									"physicalType": "nvarchar"
+								},
+								"sink": {
+									"name": "display_value",
+									"type": "String",
+									"physicalType": "nvarchar"
+								}
+							},
+							{
+								"source": {
+									"name": "returnable",
+									"type": "Int32",
+									"physicalType": "int"
+								},
+								"sink": {
+									"name": "returnable",
+									"type": "Int32",
+									"physicalType": "int"
+								}
+							},
+							{
+								"source": {
+									"name": "calc_minimum",
+									"type": "Int32",
+									"physicalType": "int"
+								},
+								"sink": {
+									"name": "calc_minimum",
+									"type": "Int32",
+									"physicalType": "int"
+								}
+							},
+							{
+								"source": {
+									"name": "calc_maximum",
+									"type": "Int32",
+									"physicalType": "int"
+								},
+								"sink": {
+									"name": "calc_maximum",
+									"type": "Int32",
+									"physicalType": "int"
+								}
+							},
+							{
+								"source": {
+									"name": "price_used",
+									"type": "Decimal",
+									"physicalType": "decimal",
+									"scale": 2,
+									"precision": 10
+								},
+								"sink": {
+									"name": "price_used",
+									"type": "Decimal",
+									"physicalType": "decimal",
+									"scale": 2,
+									"precision": 10
+								}
+							},
+							{
+								"source": {
+									"name": "dealer_net_price",
+									"type": "Decimal",
+									"physicalType": "decimal",
+									"scale": 2,
+									"precision": 10
+								},
+								"sink": {
+									"name": "dealer_net_price",
+									"type": "Decimal",
+									"physicalType": "decimal",
+									"scale": 2,
+									"precision": 10
+								}
+							},
+							{
+								"source": {
+									"name": "manage_cost_price",
+									"type": "Decimal",
+									"physicalType": "decimal",
+									"scale": 2,
+									"precision": 10
+								},
+								"sink": {
+									"name": "manage_cost_price",
+									"type": "Decimal",
+									"physicalType": "decimal",
+									"scale": 2,
+									"precision": 10
+								}
+							},
+							{
+								"source": {
+									"name": "purch_price",
+									"type": "Decimal",
+									"physicalType": "decimal",
+									"scale": 2,
+									"precision": 10
+								},
+								"sink": {
+									"name": "purch_price",
+									"type": "Decimal",
+									"physicalType": "decimal",
+									"scale": 2,
+									"precision": 10
+								}
+							},
+							{
+								"source": {
+									"name": "trans_date",
+									"type": "DateTime",
+									"physicalType": "datetime"
+								},
+								"sink": {
+									"name": "trans_date",
+									"type": "DateTime",
+									"physicalType": "date"
+								}
+							},
+							{
+								"source": {
+									"name": "receipt_date",
+									"type": "DateTime",
+									"physicalType": "datetime"
+								},
+								"sink": {
+									"name": "receipt_date",
+									"type": "DateTime",
+									"physicalType": "date"
+								}
+							},
+							{
+								"source": {
+									"name": "closed",
+									"type": "Int32",
+									"physicalType": "int"
+								},
+								"sink": {
+									"name": "closed",
+									"type": "Int32",
+									"physicalType": "int"
+								}
+							}
+						],
+						"typeConversion": true,
+						"typeConversionSettings": {
+							"allowDataTruncation": true,
+							"treatBooleanAsNumber": false
+						}
+					}
+				},
+				"inputs": [
+					{
+						"referenceName": "Briggs_MST",
+						"type": "DatasetReference"
+					}
+				],
+				"outputs": [
+					{
+						"referenceName": "Briggs_MDW",
+						"type": "DatasetReference",
+						"parameters": {
+							"schema_name": "Briggs",
+							"table_name": "Stage_Parts_LCM_Year_End_Inventory"
+						}
+					}
+				]
+			},
+			{
+				"name": "Stage_Parts_Sold_Margin_Cost_Of_Goods",
+				"type": "Copy",
+				"dependsOn": [],
+				"policy": {
+					"timeout": "7.00:00:00",
+					"retry": 0,
+					"retryIntervalInSeconds": 30,
+					"secureOutput": false,
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"source": {
+						"type": "SqlServerSource",
+						"sqlReaderQuery": "select sl.SALESID sales_id\n\t\t,sl.INVENTREFID invent_ref_id\n\t\t,sl.ITEMID item_id\n\t\t,sos.sos\n\t\t,sl.SALESQTY sales_qty\n\t\t,id.INVENTLOCATIONID invent_location_id\n\t\t,ddv.DISPLAYVALUE 'fin_branch'\n\t\t,svc.SVCCALLID svc_call_id\n\t\t,sl.CREATEDDATETIME created_date_time\n\t\t,svcTypeTable.CALLTYPEID call_type_id\n\t\t,replace(replace(sl.NAME,char(10),''),char(13),'') 'description'\n\t\t,pp.PARTPRICEGROUPID part_price_group_id\n\t\t,listprice.price 'list_price'\n\t\t,sl.salesprice 'sale_price'\n\t\t,sl.costprice 'cost_price'\n\t\t,listprice.price * sl.salesqty 'extended_list_price'\n\t\t,sl.lineamount 'extended_sale_price'\n\t\t,sl.costprice * sl.salesqty 'extended_cost'\n\t\t,sl.lineamount-(sl.costprice * sl.salesqty) 'profit'\n\t\t,case\n\t\t\twhen sl.COSTPRICE * sl.SALESQTY <> 0 then (sl.LINEAMOUNT-(sl.COSTPRICE * sl.SALESQTY))/(sl.COSTPRICE * sl.SALESQTY)\n\t\t\telse '0'\n\t\tEnd 'markup'\n\t\t,case\n\t\t\twhen sl.LINEAMOUNT <> 0 then (sl.LINEAMOUNT-(sl.COSTPRICE * sl.SALESQTY))/(sl.LINEAMOUNT)\n\t\t\telse '0'\n\t\tEnd 'margin',\n\t\tcij.INVOICEDATE invoice_date,\n\t\tcij.invoiceid invoice_id,\n\t\tst.CUSTACCOUNT cust_account,\n\t\tst.INVOICEACCOUNT invoice_account,\n\t\tst.DELIVERYNAME delivery_name,\n\t\tdir.NAME 'st_name',\n\t\tsl.createdby created_by,\n\t\t\n\t\t\n\t\t--ddv.DISPLAYVALUE 'finBranch',\nid.INVENTLOCATIONID 'warehouse',\ncase \n\twhen sl.SALESSTATUS = 1 then 'Open'\n\twhen sl.SALESSTATUS = 2 then 'Delivered'\n\twhen sl.SALESSTATUS = 3 then 'Invoiced'\nEnd 'status',\nsl.salesid 'sal_order',\nsvc.svccallid  'svc_order',\nsvctypetable.calltypeid 'svc_calltype',\nisnull(svc.invoiceaccount,st.invoiceaccount)  'bill_to',\nisnull(svc.custaccount,st.custaccount)   'ship_to',\n--sos.SOS,\n--sl.ITEMID,\nsl.NAME 'description_goods',\nsl.SALESQTY 'quantity',\ncast(sl.COSTPRICE as decimal(10,2)) 'cost_goods',\ncast((sl.COSTPRICE * sl.SALESQTY) as decimal(10,2)) 'ext_cost_goods',\ncast(sl.LINEAMOUNT as decimal(10,2)) 'line_amount',\n--cast((sl.SALESPRICE * sl.SALESQTY) as decimal(10,2)) 'Ext Sale',\nsl.INVENTREFID 'p.o',\ncase\n     when sl.INVENTREFID  like 'pur%' or sl.INVENTREFID like 'trj%'\n          then 1\n          else 0\n END 'line_b_ord',\ncase\n     when sl.INVENTREFID not like 'pur%' and sl.INVENTREFID not like 'trj%'\n          then 1\n          else 0\n END 'line_stock',\nsl.CREATEDDATETIME 'line_created',\nsl.recid rec_id,sl.SALESSTATUS sales_status\n\t\t\nfrom SALESLINE sl \nleft join XAP_SOURCEOFSUPPLY sos on sos.RECID = sl.SOSRECID\nleft join SALESTABLE st on st.SALESID = sl.SALESID\nleft join INVENTDIM id on sl.INVENTDIMID = id.INVENTDIMID\nleft join INVENTITEMLOCATION iil on iil.ITEMID = sl.ITEMID and iil.COUNTGROUPID = id.INVENTLOCATIONID\nleft join DEFAULTDIMENSIONVIEW ddv on ddv.DEFAULTDIMENSION = st.DEFAULTDIMENSION and ddv.DIMENSIONATTRIBUTEID = 5637145333\nleft join XAP_SVCCALLTABLE svc on svc.RECID = st.SVCCALLRECID\nleft join XAP_SVCCALLTYPETABLE svcTypeTable ON svc.CALLTYPEID = svcTypeTable.RECID\n\nleft join XAP_PARTPRICEGROUP pp on pp.RECID = st.PARTPRICEGROUPRECID\nleft join INVENTTABLEMODULE listprice on listprice.ITEMID = sl.ITEMID and MODULETYPE = 2\nleft join dbo.custinvoicejour as cij on cij.salesid = st.salesid\nleft join CUSTTABLE ct on ct.accountnum = st.INVOICEACCOUNT\nleft join dirpartytable dir on dir.RECID = ct.PARTY\nwhere sos.RECID is not null\n\tand st.SALESSTATUS in (1,2,3)\n\tand (year(sl.CREATEDDATETIME)>='2020'\n\tor year(cij.INVOICEDATE)>='2020')",
+						"queryTimeout": "02:00:00",
+						"partitionOption": "None"
+					},
+					"sink": {
+						"type": "AzureSqlSink",
+						"preCopyScript": "truncate table briggs.Stage_Parts_Sold_Margin_Cost_Of_Goods",
+						"disableMetricsCollection": false
+					},
+					"enableStaging": false,
+					"translator": {
+						"type": "TabularTranslator",
+						"mappings": [
+							{
+								"source": {
+									"name": "sales_id",
+									"type": "String",
+									"physicalType": "nvarchar"
+								},
+								"sink": {
+									"name": "sales_id",
+									"type": "String",
+									"physicalType": "String"
+								}
+							},
+							{
+								"source": {
+									"name": "invent_ref_id",
+									"type": "String",
+									"physicalType": "nvarchar"
+								},
+								"sink": {
+									"name": "invent_ref_id",
+									"type": "String",
+									"physicalType": "String"
+								}
+							},
+							{
+								"source": {
+									"name": "item_id",
+									"type": "String",
+									"physicalType": "nvarchar"
+								},
+								"sink": {
+									"name": "item_id",
+									"type": "String",
+									"physicalType": "String"
+								}
+							},
+							{
+								"source": {
+									"name": "sos",
+									"type": "String",
+									"physicalType": "nvarchar"
+								},
+								"sink": {
+									"name": "sos",
+									"type": "String",
+									"physicalType": "String"
+								}
+							},
+							{
+								"source": {
+									"name": "sales_qty",
+									"type": "Decimal",
+									"physicalType": "decimal",
+									"scale": 16,
+									"precision": 32
+								},
+								"sink": {
+									"name": "sales_qty",
+									"type": "Decimal",
+									"physicalType": "Decimal"
+								}
+							},
+							{
+								"source": {
+									"name": "invent_location_id",
+									"type": "String",
+									"physicalType": "nvarchar"
+								},
+								"sink": {
+									"name": "invent_location_id",
+									"type": "String",
+									"physicalType": "String"
+								}
+							},
+							{
+								"source": {
+									"name": "fin_branch",
+									"type": "String",
+									"physicalType": "nvarchar"
+								},
+								"sink": {
+									"name": "fin_branch",
+									"type": "String",
+									"physicalType": "String"
+								}
+							},
+							{
+								"source": {
+									"name": "svc_call_id",
+									"type": "String",
+									"physicalType": "nvarchar"
+								},
+								"sink": {
+									"name": "svc_call_id",
+									"type": "String",
+									"physicalType": "String"
+								}
+							},
+							{
+								"source": {
+									"name": "created_date_time",
+									"type": "DateTime",
+									"physicalType": "datetime"
+								},
+								"sink": {
+									"name": "created_date_time",
+									"type": "DateTime",
+									"physicalType": "DateTime"
+								}
+							},
+							{
+								"source": {
+									"name": "call_type_id",
+									"type": "String",
+									"physicalType": "nvarchar"
+								},
+								"sink": {
+									"name": "call_type_id",
+									"type": "String",
+									"physicalType": "String"
+								}
+							},
+							{
+								"source": {
+									"name": "description",
+									"type": "String",
+									"physicalType": "nvarchar"
+								},
+								"sink": {
+									"name": "description",
+									"type": "String",
+									"physicalType": "String"
+								}
+							},
+							{
+								"source": {
+									"name": "part_price_group_id",
+									"type": "String",
+									"physicalType": "nvarchar"
+								},
+								"sink": {
+									"name": "part_price_group_id",
+									"type": "String",
+									"physicalType": "String"
+								}
+							},
+							{
+								"source": {
+									"name": "list_price",
+									"type": "Decimal",
+									"physicalType": "decimal",
+									"scale": 16,
+									"precision": 32
+								},
+								"sink": {
+									"name": "list_price",
+									"type": "Decimal",
+									"physicalType": "Decimal"
+								}
+							},
+							{
+								"source": {
+									"name": "sale_price",
+									"type": "Decimal",
+									"physicalType": "decimal",
+									"scale": 16,
+									"precision": 32
+								},
+								"sink": {
+									"name": "sale_price",
+									"type": "Decimal",
+									"physicalType": "Decimal"
+								}
+							},
+							{
+								"source": {
+									"name": "cost_price",
+									"type": "Decimal",
+									"physicalType": "decimal",
+									"scale": 16,
+									"precision": 32
+								},
+								"sink": {
+									"name": "cost_price",
+									"type": "Decimal",
+									"physicalType": "Decimal"
+								}
+							},
+							{
+								"source": {
+									"name": "extended_list_price",
+									"type": "Decimal",
+									"physicalType": "decimal",
+									"scale": 6,
+									"precision": 38
+								},
+								"sink": {
+									"name": "extended_list_price",
+									"type": "Decimal",
+									"physicalType": "Decimal"
+								}
+							},
+							{
+								"source": {
+									"name": "extended_sale_price",
+									"type": "Decimal",
+									"physicalType": "decimal",
+									"scale": 16,
+									"precision": 32
+								},
+								"sink": {
+									"name": "extended_sale_price",
+									"type": "Decimal",
+									"physicalType": "Decimal"
+								}
+							},
+							{
+								"source": {
+									"name": "extended_cost",
+									"type": "Decimal",
+									"physicalType": "decimal",
+									"scale": 6,
+									"precision": 38
+								},
+								"sink": {
+									"name": "extended_cost",
+									"type": "Decimal",
+									"physicalType": "Decimal"
+								}
+							},
+							{
+								"source": {
+									"name": "profit",
+									"type": "Decimal",
+									"physicalType": "decimal",
+									"scale": 6,
+									"precision": 38
+								},
+								"sink": {
+									"name": "profit",
+									"type": "Decimal",
+									"physicalType": "Decimal"
+								}
+							},
+							{
+								"source": {
+									"name": "markup",
+									"type": "Decimal",
+									"physicalType": "decimal",
+									"scale": 6,
+									"precision": 38
+								},
+								"sink": {
+									"name": "markup",
+									"type": "Decimal",
+									"physicalType": "Decimal"
+								}
+							},
+							{
+								"source": {
+									"name": "margin",
+									"type": "Decimal",
+									"physicalType": "decimal",
+									"scale": 6,
+									"precision": 38
+								},
+								"sink": {
+									"name": "margin",
+									"type": "Decimal",
+									"physicalType": "Decimal"
+								}
+							},
+							{
+								"source": {
+									"name": "invoice_date",
+									"type": "DateTime",
+									"physicalType": "datetime"
+								},
+								"sink": {
+									"name": "invoice_date",
+									"type": "DateTime",
+									"physicalType": "DateTime"
+								}
+							},
+							{
+								"source": {
+									"name": "invoice_id",
+									"type": "String",
+									"physicalType": "nvarchar"
+								},
+								"sink": {
+									"name": "invoice_id",
+									"type": "String",
+									"physicalType": "String"
+								}
+							},
+							{
+								"source": {
+									"name": "cust_account",
+									"type": "String",
+									"physicalType": "nvarchar"
+								},
+								"sink": {
+									"name": "cust_account",
+									"type": "String",
+									"physicalType": "String"
+								}
+							},
+							{
+								"source": {
+									"name": "invoice_account",
+									"type": "String",
+									"physicalType": "nvarchar"
+								},
+								"sink": {
+									"name": "invoice_account",
+									"type": "String",
+									"physicalType": "String"
+								}
+							},
+							{
+								"source": {
+									"name": "delivery_name",
+									"type": "String",
+									"physicalType": "nvarchar"
+								},
+								"sink": {
+									"name": "delivery_name",
+									"type": "String",
+									"physicalType": "String"
+								}
+							},
+							{
+								"source": {
+									"name": "st_name",
+									"type": "String",
+									"physicalType": "nvarchar"
+								},
+								"sink": {
+									"name": "st_name",
+									"type": "String",
+									"physicalType": "String"
+								}
+							},
+							{
+								"source": {
+									"name": "created_by",
+									"type": "String",
+									"physicalType": "nvarchar"
+								},
+								"sink": {
+									"name": "created_by",
+									"type": "String",
+									"physicalType": "String"
+								}
+							},
+							{
+								"source": {
+									"name": "warehouse",
+									"type": "String",
+									"physicalType": "nvarchar"
+								},
+								"sink": {
+									"name": "warehouse",
+									"type": "String",
+									"physicalType": "String"
+								}
+							},
+							{
+								"source": {
+									"name": "status",
+									"type": "String",
+									"physicalType": "varchar"
+								},
+								"sink": {
+									"name": "status",
+									"type": "String",
+									"physicalType": "String"
+								}
+							},
+							{
+								"source": {
+									"name": "sal_order",
+									"type": "String",
+									"physicalType": "nvarchar"
+								},
+								"sink": {
+									"name": "sal_order",
+									"type": "String",
+									"physicalType": "String"
+								}
+							},
+							{
+								"source": {
+									"name": "svc_order",
+									"type": "String",
+									"physicalType": "nvarchar"
+								},
+								"sink": {
+									"name": "svc_order",
+									"type": "String",
+									"physicalType": "String"
+								}
+							},
+							{
+								"source": {
+									"name": "svc_calltype",
+									"type": "String",
+									"physicalType": "nvarchar"
+								},
+								"sink": {
+									"name": "svc_calltype",
+									"type": "String",
+									"physicalType": "String"
+								}
+							},
+							{
+								"source": {
+									"name": "bill_to",
+									"type": "String",
+									"physicalType": "nvarchar"
+								},
+								"sink": {
+									"name": "bill_to",
+									"type": "String",
+									"physicalType": "String"
+								}
+							},
+							{
+								"source": {
+									"name": "ship_to",
+									"type": "String",
+									"physicalType": "nvarchar"
+								},
+								"sink": {
+									"name": "ship_to",
+									"type": "String",
+									"physicalType": "String"
+								}
+							},
+							{
+								"source": {
+									"name": "description_goods",
+									"type": "String",
+									"physicalType": "nvarchar"
+								},
+								"sink": {
+									"name": "description_goods",
+									"type": "String",
+									"physicalType": "String"
+								}
+							},
+							{
+								"source": {
+									"name": "quantity",
+									"type": "Decimal",
+									"physicalType": "decimal",
+									"scale": 16,
+									"precision": 32
+								},
+								"sink": {
+									"name": "quantity",
+									"type": "Decimal",
+									"physicalType": "Decimal"
+								}
+							},
+							{
+								"source": {
+									"name": "cost_goods",
+									"type": "Decimal",
+									"physicalType": "decimal",
+									"scale": 2,
+									"precision": 10
+								},
+								"sink": {
+									"name": "cost_goods",
+									"type": "Decimal",
+									"physicalType": "Decimal"
+								}
+							},
+							{
+								"source": {
+									"name": "ext_cost_goods",
+									"type": "Decimal",
+									"physicalType": "decimal",
+									"scale": 2,
+									"precision": 10
+								},
+								"sink": {
+									"name": "ext_cost_goods",
+									"type": "Decimal",
+									"physicalType": "Decimal"
+								}
+							},
+							{
+								"source": {
+									"name": "line_amount",
+									"type": "Decimal",
+									"physicalType": "decimal",
+									"scale": 2,
+									"precision": 10
+								},
+								"sink": {
+									"name": "line_amount",
+									"type": "Decimal",
+									"physicalType": "Decimal"
+								}
+							},
+							{
+								"source": {
+									"name": "p.o",
+									"type": "String",
+									"physicalType": "nvarchar"
+								},
+								"sink": {
+									"name": "p.o",
+									"type": "String",
+									"physicalType": "String"
+								}
+							},
+							{
+								"source": {
+									"name": "line_b_ord",
+									"type": "Int32",
+									"physicalType": "int"
+								},
+								"sink": {
+									"name": "line_b_ord",
+									"type": "Int32",
+									"physicalType": "Int32"
+								}
+							},
+							{
+								"source": {
+									"name": "line_stock",
+									"type": "Int32",
+									"physicalType": "int"
+								},
+								"sink": {
+									"name": "line_stock",
+									"type": "Int32",
+									"physicalType": "Int32"
+								}
+							},
+							{
+								"source": {
+									"name": "line_created",
+									"type": "DateTime",
+									"physicalType": "datetime"
+								},
+								"sink": {
+									"name": "line_created",
+									"type": "DateTime",
+									"physicalType": "DateTime"
+								}
+							},
+							{
+								"source": {
+									"name": "rec_id",
+									"type": "Int64",
+									"physicalType": "bigint"
+								},
+								"sink": {
+									"name": "rec_id",
+									"type": "Int64",
+									"physicalType": "Int64"
+								}
+							},
+							{
+								"source": {
+									"name": "sales_status",
+									"type": "Int32",
+									"physicalType": "int"
+								},
+								"sink": {
+									"name": "sales_status",
+									"type": "Int32",
+									"physicalType": "Int32"
+								}
+							}
+						],
+						"typeConversion": true,
+						"typeConversionSettings": {
+							"allowDataTruncation": true,
+							"treatBooleanAsNumber": false
+						}
+					}
+				},
+				"inputs": [
+					{
+						"referenceName": "Briggs_MST",
+						"type": "DatasetReference"
+					}
+				],
+				"outputs": [
+					{
+						"referenceName": "Briggs_MDW",
+						"type": "DatasetReference",
+						"parameters": {
+							"schema_name": "Briggs",
+							"table_name": "Stage_Parts_Sold_Margin_Cost_Of_Goods"
+						}
+					}
+				]
+			},
+			{
+				"name": "Stage_Part_Fill_Rate",
+				"type": "Copy",
+				"dependsOn": [],
+				"policy": {
+					"timeout": "7.00:00:00",
+					"retry": 0,
+					"retryIntervalInSeconds": 30,
+					"secureOutput": false,
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"source": {
+						"type": "SqlServerSource",
+						"sqlReaderQuery": "--declare @startdate varchar(10) = '2017-02',\n--@enddate varchar(10) = '2017-02',\n--@branch varchar(10) = '107',\n--@orderclass varchar(100)  = 'parts',\n--@svcType varchar(100) = 'None'-- 'PM'\n\n\nselect fr.*\n\t\t,cast(fr.Demand as int) 'display_demand'\n\t\t,cast(fr.Calls as int) 'display_calls'\n\t\t,ic.CELLID cell_id\n\t\t,case when ic.CELLID like 'AA%' then 1 else 2 end 'sort'\nfrom ( select\nddv.DISPLAYVALUE 'fin_branch',\nid.INVENTLOCATIONID 'warehouse',\ncase \n\twhen sl.SALESSTATUS = 1 then 'Open'\n\twhen sl.SALESSTATUS = 2 then 'Delivered'\n\twhen sl.SALESSTATUS = 3 then 'Invoiced'\nEnd 'status',\nsl.SALESID 'sal_order',\nsvc.SVCCALLID  'svc_order',\nsvcTypeTable.CALLTYPEID 'svc_call_type',\nisnull(svc.INVOICEACCOUNT,st.INVOICEACCOUNT)  'bill_to',\nisnull(svc.CUSTACCOUNT,st.CUSTACCOUNT)   'ship_to',\nsos.SOS sos,\nsl.ITEMID item_id,\nsl.NAME 'description',\ncast(sl.COSTPRICE as decimal(10,2)) 'cost',\nsl.SALESQTY 'quantity',\ncast((sl.COSTPRICE * sl.SALESQTY) as decimal(10,2)) 'ext_cost',\nsl.INVENTREFID 'po',\ncase\n     when sl.INVENTREFID <> ''\n          then 1\n          else 0\n END 'line_b_ord',\ncase\n     when sl.INVENTREFID = ''\n          then 1\n          else 0\n END 'line_stock',\nsl.CREATEDDATETIME 'line_created',\nsl.RECID 'line_rec_id',\nsum(cd.call) 'calls',\nsum(cd.demand) 'demand',\nst.PROJID  proj_id\n\n \nfrom       SALESLINE sl\ninner join XAP_SOURCEOFSUPPLY sos\n        on sos.RECID = sl.SOSRECID\nleft join SALESTABLE st\n        on st.SALESID = sl.SALESID\nleft join INVENTDIM id\n        on sl.INVENTDIMID = id.INVENTDIMID\nleft join DEFAULTDIMENSIONVIEW ddv\n        on ddv.DEFAULTDIMENSION = sl.DEFAULTDIMENSION\n       and ddv.DIMENSIONATTRIBUTEID = 5637145333\nleft join XAP_SVCCALLTABLE svc\n        on svc.RECID = st.SVCCALLRECID\nleft join XAP_SVCCALLTYPETABLE svcTypeTable\n        on svc.CALLTYPEID = svcTypeTable.RECID\nleft join XAP_CALLDEMAND cd\n        on cd.itemid = sl.itemid\n       and cd.inventlocationid = id.inventlocationid\n       and cd.TRANSDATE <=\n              cast ( year(sl.CREATEDDATETIME) as varchar(10) ) +\n              Replace ( Str ( cast ( month(sl.CREATEDDATETIME) as varchar(10) ), 2 ),\n                        ' ', '0' )\n       and cd.TRANSDATE >=\n              cast ( ( year(sl.CREATEDDATETIME) -1 ) as varchar(10) ) +\n              Replace ( Str ( cast ( month(sl.CREATEDDATETIME) as varchar(10) ), 2 ),\n                        ' ', '0' )\n \nwhere sos.RECID is not null\n  and sl.SALESSTATUS in (1,2,3)\n  and year(sl.CREATEDDATETIME)>='2021'\n      --between cast(@startdate + '-01' as date)\n          --and dateadd ( dd, -1, DATEADD ( m, +1, cast (@enddate + '-01' as date) ) )\n  --and ddv.DISPLAYVALUE in (@branch)\n  and sl.SALESQTY > 0\n  and sos.SOS not in ('HYSWARR','YALEWARR','RCON','TSRV')\n  and id.INVENTLOCATIONID like 'p%'\n  and id.INVENTLOCATIONID not in ('PTXWACO','PTXWFAL','PBEFLEET','PTXELP','PTXLUBB','PTXMEDL','PTXODSS')\n  --and st.PROJID like case \n\t--\t\t\t\twhen @orderclass = 'service' then 'S%'\n\t--\t\t\t\twhen @orderclass = 'all' then '%' \n\t--\t\t\t\twhen @orderclass = 'parts' then ''\n\t--\t\t\tend\n  --and (('None' in (@svcType)) or  ('All' in (@svcType)) or svcTypeTable.CALLTYPEID in (@svcType))\ngroup by\nddv.DISPLAYVALUE,\nid.INVENTLOCATIONID,\nsl.SALESSTATUS,\nsl.SALESID,\nsvc.SVCCALLID,\nsvcTypeTable.CALLTYPEID,\nisnull(svc.INVOICEACCOUNT,st.INVOICEACCOUNT) ,\nisnull(svc.CUSTACCOUNT,st.CUSTACCOUNT) , \nsos.SOS,\nsl.ITEMID,\nsl.NAME,\ncast(sl.COSTPRICE as decimal(10,2)),\nsl.SALESQTY,\nsl.INVENTREFID,\ncast((sl.COSTPRICE * sl.SALESQTY) as decimal(10,2)),\ncase\n     when sl.INVENTREFID <> ''\n          then 1\n          else 0\n END,\ncase\n     when sl.INVENTREFID = ''\n          then 1\n          else 0\n END,\nsl.CREATEDDATETIME,sl.RECID,st.PROJID ) fr\n \nleft join XAP_SOURCEOFSUPPLY sos\n       on sos.SOS = fr.SOS\nleft join XAP_INVENTCLASSIFICATION ic\n        on ic.ITEMACTIVITY = 1\n       and ic.SOSRECID = sos.RECID\n       and ic.INVENTLOCATIONID = fr.Warehouse\n       and case\n                when isnull ( fr.Demand, 0 ) >  0\n                 and isnull ( fr.Calls,  0 ) <= 0\n                     then 1\n                when isnull ( fr.Calls,  0 ) <= 0\n                     then 0 \n                else fr.Calls\n            end\n            between ic.CALLFROM and ic.CALLTO\n       and round(case\n                when isnull ( fr.Demand, 0 ) >  0\n                 and isnull ( fr.Calls,  0 ) <= 0\n                     then fr.Demand/1\n                when isnull ( fr.Calls,  0 ) <= 0\n                     then 0\n                when isnull ( fr.Demand, 0 ) <= 0\n                     then 0\n                else fr.Demand/fr.Calls\n            end * fr.Cost,2)\n            between ic.PRICEFROM and ic.PRICETO\n\noption (recompile)\n",
+						"queryTimeout": "02:00:00",
+						"partitionOption": "None"
+					},
+					"sink": {
+						"type": "AzureSqlSink",
+						"preCopyScript": "truncate table briggs.Stage_Part_Fill_Rate",
+						"disableMetricsCollection": false
+					},
+					"enableStaging": false,
+					"translator": {
+						"type": "TabularTranslator",
+						"mappings": [
+							{
+								"source": {
+									"name": "fin_branch",
+									"type": "String",
+									"physicalType": "nvarchar"
+								},
+								"sink": {
+									"name": "fin_branch",
+									"type": "String",
+									"physicalType": "String"
+								}
+							},
+							{
+								"source": {
+									"name": "warehouse",
+									"type": "String",
+									"physicalType": "nvarchar"
+								},
+								"sink": {
+									"name": "warehouse",
+									"type": "String",
+									"physicalType": "String"
+								}
+							},
+							{
+								"source": {
+									"name": "status",
+									"type": "String",
+									"physicalType": "varchar"
+								},
+								"sink": {
+									"name": "status",
+									"type": "String",
+									"physicalType": "String"
+								}
+							},
+							{
+								"source": {
+									"name": "sal_order",
+									"type": "String",
+									"physicalType": "nvarchar"
+								},
+								"sink": {
+									"name": "sal_order",
+									"type": "String",
+									"physicalType": "String"
+								}
+							},
+							{
+								"source": {
+									"name": "svc_order",
+									"type": "String",
+									"physicalType": "nvarchar"
+								},
+								"sink": {
+									"name": "svc_order",
+									"type": "String",
+									"physicalType": "String"
+								}
+							},
+							{
+								"source": {
+									"name": "svc_call_type",
+									"type": "String",
+									"physicalType": "nvarchar"
+								},
+								"sink": {
+									"name": "svc_call_type",
+									"type": "String",
+									"physicalType": "String"
+								}
+							},
+							{
+								"source": {
+									"name": "bill_to",
+									"type": "String",
+									"physicalType": "nvarchar"
+								},
+								"sink": {
+									"name": "bill_to",
+									"type": "String",
+									"physicalType": "String"
+								}
+							},
+							{
+								"source": {
+									"name": "ship_to",
+									"type": "String",
+									"physicalType": "nvarchar"
+								},
+								"sink": {
+									"name": "ship_to",
+									"type": "String",
+									"physicalType": "String"
+								}
+							},
+							{
+								"source": {
+									"name": "sos",
+									"type": "String",
+									"physicalType": "nvarchar"
+								},
+								"sink": {
+									"name": "sos",
+									"type": "String",
+									"physicalType": "String"
+								}
+							},
+							{
+								"source": {
+									"name": "item_id",
+									"type": "String",
+									"physicalType": "nvarchar"
+								},
+								"sink": {
+									"name": "item_id",
+									"type": "String",
+									"physicalType": "String"
+								}
+							},
+							{
+								"source": {
+									"name": "description",
+									"type": "String",
+									"physicalType": "nvarchar"
+								},
+								"sink": {
+									"name": "description",
+									"type": "String",
+									"physicalType": "String"
+								}
+							},
+							{
+								"source": {
+									"name": "cost",
+									"type": "Decimal",
+									"physicalType": "decimal",
+									"scale": 2,
+									"precision": 10
+								},
+								"sink": {
+									"name": "cost",
+									"type": "Decimal",
+									"physicalType": "Decimal"
+								}
+							},
+							{
+								"source": {
+									"name": "quantity",
+									"type": "Decimal",
+									"physicalType": "decimal",
+									"scale": 16,
+									"precision": 32
+								},
+								"sink": {
+									"name": "quantity",
+									"type": "Decimal",
+									"physicalType": "Decimal"
+								}
+							},
+							{
+								"source": {
+									"name": "ext_cost",
+									"type": "Decimal",
+									"physicalType": "decimal",
+									"scale": 2,
+									"precision": 10
+								},
+								"sink": {
+									"name": "ext_cost",
+									"type": "Decimal",
+									"physicalType": "Decimal"
+								}
+							},
+							{
+								"source": {
+									"name": "po",
+									"type": "String",
+									"physicalType": "nvarchar"
+								},
+								"sink": {
+									"name": "po",
+									"type": "String",
+									"physicalType": "String"
+								}
+							},
+							{
+								"source": {
+									"name": "line_b_ord",
+									"type": "Int32",
+									"physicalType": "int"
+								},
+								"sink": {
+									"name": "line_b_ord",
+									"type": "Int32",
+									"physicalType": "Int32"
+								}
+							},
+							{
+								"source": {
+									"name": "line_stock",
+									"type": "Int32",
+									"physicalType": "int"
+								},
+								"sink": {
+									"name": "line_stock",
+									"type": "Int32",
+									"physicalType": "Int32"
+								}
+							},
+							{
+								"source": {
+									"name": "line_created",
+									"type": "DateTime",
+									"physicalType": "datetime"
+								},
+								"sink": {
+									"name": "line_created",
+									"type": "DateTime",
+									"physicalType": "DateTime"
+								}
+							},
+							{
+								"source": {
+									"name": "line_rec_id",
+									"type": "Int64",
+									"physicalType": "bigint"
+								},
+								"sink": {
+									"name": "line_rec_id",
+									"type": "Int64",
+									"physicalType": "Int64"
+								}
+							},
+							{
+								"source": {
+									"name": "calls",
+									"type": "Int32",
+									"physicalType": "int"
+								},
+								"sink": {
+									"name": "calls",
+									"type": "Int32",
+									"physicalType": "Int32"
+								}
+							},
+							{
+								"source": {
+									"name": "demand",
+									"type": "Decimal",
+									"physicalType": "decimal",
+									"scale": 16,
+									"precision": 38
+								},
+								"sink": {
+									"name": "demand",
+									"type": "Decimal",
+									"physicalType": "Decimal"
+								}
+							},
+							{
+								"source": {
+									"name": "proj_id",
+									"type": "String",
+									"physicalType": "nvarchar"
+								},
+								"sink": {
+									"name": "proj_id",
+									"type": "String",
+									"physicalType": "String"
+								}
+							},
+							{
+								"source": {
+									"name": "display_demand",
+									"type": "Int32",
+									"physicalType": "int"
+								},
+								"sink": {
+									"name": "display_demand",
+									"type": "Int32",
+									"physicalType": "Int32"
+								}
+							},
+							{
+								"source": {
+									"name": "display_calls",
+									"type": "Int32",
+									"physicalType": "int"
+								},
+								"sink": {
+									"name": "display_calls",
+									"type": "Int32",
+									"physicalType": "Int32"
+								}
+							},
+							{
+								"source": {
+									"name": "cell_id",
+									"type": "String",
+									"physicalType": "nvarchar"
+								},
+								"sink": {
+									"name": "cell_id",
+									"type": "String",
+									"physicalType": "String"
+								}
+							},
+							{
+								"source": {
+									"name": "sort",
+									"type": "Int32",
+									"physicalType": "int"
+								},
+								"sink": {
+									"name": "sort",
+									"type": "Int32",
+									"physicalType": "Int32"
+								}
+							}
+						],
+						"typeConversion": true,
+						"typeConversionSettings": {
+							"allowDataTruncation": true,
+							"treatBooleanAsNumber": false
+						}
+					}
+				},
+				"inputs": [
+					{
+						"referenceName": "Briggs_MST",
+						"type": "DatasetReference"
+					}
+				],
+				"outputs": [
+					{
+						"referenceName": "Briggs_MDW",
+						"type": "DatasetReference",
+						"parameters": {
+							"schema_name": "Briggs",
+							"table_name": "Stage_Part_Fill_Rate"
+						}
+					}
+				]
+			}
+		],
+		"folder": {
+			"name": "Briggs Data Load Theme wise"
+		},
+		"annotations": [],
+		"lastPublishTime": "2022-03-23T13:53:22Z"
+	},
+	"type": "Microsoft.Synapse/workspaces/pipelines"
+}

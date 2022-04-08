@@ -1,0 +1,24 @@
+{
+	"name": "POR_Stage_Table_Refresh",
+	"properties": {
+		"annotations": [],
+		"runtimeState": "Started",
+		"pipelines": [
+			{
+				"pipelineReference": {
+					"referenceName": "PL_POR_EXECUTIVE_STAGE_TABLES_LOAD",
+					"type": "PipelineReference"
+				}
+			}
+		],
+		"type": "ScheduleTrigger",
+		"typeProperties": {
+			"recurrence": {
+				"frequency": "Day",
+				"interval": 1,
+				"startTime": "2022-02-08T13:00:00",
+				"timeZone": "India Standard Time"
+			}
+		}
+	}
+}

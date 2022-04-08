@@ -1,0 +1,13 @@
+{
+	"name": "DS_BIE_DATA_WAREHOUSE",
+	"properties": {
+		"linkedServiceName": {
+			"referenceName": "LS_Briggs_BIE_DATA_WAREHOUSE",
+			"type": "LinkedServiceReference"
+		},
+		"annotations": [],
+		"type": "SqlServerTable",
+		"schema": []
+	},
+	"type": "Microsoft.Synapse/workspaces/datasets"
+}

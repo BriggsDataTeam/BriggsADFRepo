@@ -1,0 +1,559 @@
+{
+	"name": "PL_Generic_Copy_Parts",
+	"properties": {
+		"activities": [
+			{
+				"name": "Lookup1_Incremental",
+				"type": "Lookup",
+				"dependsOn": [],
+				"policy": {
+					"timeout": "7.00:00:00",
+					"retry": 0,
+					"retryIntervalInSeconds": 30,
+					"secureOutput": false,
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"source": {
+						"type": "AzureSqlSource",
+						"sqlReaderQuery": "Select Distinct ID ID_Inc From dbo.control_table Where ProcessName = 'AzSQL_ADLS'  \nAND DataLoadType = 'Incremental'  and EnableAction = 1  \nand (format(refresh_date,'dd-MM-yyyy') <> format(getdate(),'dd-MM-yyyy') or refresh_date is null)\nand subjectarea like '%Sales Parts%' and id <> 253 \norder by 1 ",
+						"queryTimeout": "02:00:00",
+						"partitionOption": "None"
+					},
+					"dataset": {
+						"referenceName": "Briggs_MDW",
+						"type": "DatasetReference",
+						"parameters": {
+							"schema_name": "dbo",
+							"table_name": "user"
+						}
+					},
+					"firstRowOnly": false
+				}
+			},
+			{
+				"name": "Lookup2_Full",
+				"type": "Lookup",
+				"dependsOn": [],
+				"policy": {
+					"timeout": "7.00:00:00",
+					"retry": 0,
+					"retryIntervalInSeconds": 30,
+					"secureOutput": false,
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"source": {
+						"type": "AzureSqlSource",
+						"sqlReaderQuery": "Select Distinct ID ID_Full From dbo.control_table Where ProcessName = 'AzSQL_ADLS'  \nAND DataLoadType = 'Full'  and EnableAction = 1 \nand (format(refresh_date,'dd-MM-yyyy') <> format(getdate(),'dd-MM-yyyy') or refresh_date is null)\nand subjectarea like '%Sales Parts%' \norder by 1 ",
+						"queryTimeout": "02:00:00",
+						"partitionOption": "None"
+					},
+					"dataset": {
+						"referenceName": "Briggs_MDW",
+						"type": "DatasetReference",
+						"parameters": {
+							"schema_name": "dbo",
+							"table_name": "user"
+						}
+					},
+					"firstRowOnly": false
+				}
+			},
+			{
+				"name": "ForEach_Incremental_Load",
+				"type": "ForEach",
+				"dependsOn": [
+					{
+						"activity": "Lookup1_Incremental",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"userProperties": [],
+				"typeProperties": {
+					"items": {
+						"value": "@activity('Lookup1_Incremental').output.value",
+						"type": "Expression"
+					},
+					"activities": [
+						{
+							"name": "Lookup_Incremental",
+							"type": "Lookup",
+							"dependsOn": [],
+							"policy": {
+								"timeout": "7.00:00:00",
+								"retry": 0,
+								"retryIntervalInSeconds": 30,
+								"secureOutput": false,
+								"secureInput": false
+							},
+							"userProperties": [],
+							"typeProperties": {
+								"source": {
+									"type": "AzureSqlSource",
+									"sqlReaderQuery": {
+										"value": "@concat('select SourceQuery=''select '' +columnList+ '' from ''+ sourceDB+''.''+SourceSchemaName+''.''+SourcetableName + '' where \ncast(''+DateField+'' as date) >=''''''+LastDate+''''''''\n,SourceDB\n,TargetContainer\n, TargetPath, TargetFile, FileFormat,DateField,LastDate,targetstagetableschema,targetstagetablename\nfrom dbo.control_table\nwhere ID= ',item().ID_Inc)",
+										"type": "Expression"
+									},
+									"queryTimeout": "02:00:00",
+									"partitionOption": "None"
+								},
+								"dataset": {
+									"referenceName": "Briggs_MDW",
+									"type": "DatasetReference",
+									"parameters": {
+										"schema_name": "dbo",
+										"table_name": "user"
+									}
+								}
+							}
+						},
+						{
+							"name": "Copy_Briggs_Inc_ADLS",
+							"type": "Copy",
+							"dependsOn": [
+								{
+									"activity": "Lookup_Incremental",
+									"dependencyConditions": [
+										"Succeeded"
+									]
+								}
+							],
+							"policy": {
+								"timeout": "7.00:00:00",
+								"retry": 0,
+								"retryIntervalInSeconds": 30,
+								"secureOutput": false,
+								"secureInput": false
+							},
+							"userProperties": [],
+							"typeProperties": {
+								"source": {
+									"type": "SqlServerSource",
+									"sqlReaderQuery": {
+										"value": "@activity('Lookup_Incremental').output.firstRow.SourceQuery\n",
+										"type": "Expression"
+									},
+									"queryTimeout": "02:00:00",
+									"partitionOption": "None"
+								},
+								"sink": {
+									"type": "AzureSqlSink",
+									"preCopyScript": {
+										"value": "@{concat('delete from ',activity('Lookup_Incremental').output.firstRow.TargetStageTableSchema,'.',activity('Lookup_Incremental').output.firstRow.targetstagetablename,' where cast(',activity('Lookup_Incremental').output.firstRow.DateField,' as date)=','''',activity('Lookup_Incremental').output.firstRow.LastDate,'''')}",
+										"type": "Expression"
+									},
+									"disableMetricsCollection": false
+								},
+								"enableStaging": false,
+								"translator": {
+									"type": "TabularTranslator",
+									"typeConversion": true,
+									"typeConversionSettings": {
+										"allowDataTruncation": true,
+										"treatBooleanAsNumber": false
+									}
+								}
+							},
+							"inputs": [
+								{
+									"referenceName": "DS_Briggs_MST",
+									"type": "DatasetReference"
+								}
+							],
+							"outputs": [
+								{
+									"referenceName": "Briggs_MDW",
+									"type": "DatasetReference",
+									"parameters": {
+										"schema_name": {
+											"value": "@activity('Lookup_Incremental').output.firstRow.TargetStageTableSchema",
+											"type": "Expression"
+										},
+										"table_name": {
+											"value": "@activity('Lookup_Incremental').output.firstRow.TargetStageTableName",
+											"type": "Expression"
+										}
+									}
+								}
+							]
+						},
+						{
+							"name": "Copy_Briggs_Inc_ADLS_New",
+							"type": "Copy",
+							"dependsOn": [
+								{
+									"activity": "Copy_Briggs_Inc_ADLS",
+									"dependencyConditions": [
+										"Failed"
+									]
+								}
+							],
+							"policy": {
+								"timeout": "7.00:00:00",
+								"retry": 0,
+								"retryIntervalInSeconds": 30,
+								"secureOutput": false,
+								"secureInput": false
+							},
+							"userProperties": [],
+							"typeProperties": {
+								"source": {
+									"type": "SqlServerSource",
+									"sqlReaderQuery": {
+										"value": "@activity('Lookup_Incremental').output.firstRow.SourceQuery\n",
+										"type": "Expression"
+									},
+									"queryTimeout": "02:00:00",
+									"partitionOption": "None"
+								},
+								"sink": {
+									"type": "AzureSqlSink",
+									"writeBehavior": "insert",
+									"sqlWriterUseTableLock": false,
+									"tableOption": "autoCreate",
+									"disableMetricsCollection": false
+								},
+								"enableStaging": false,
+								"translator": {
+									"type": "TabularTranslator",
+									"typeConversion": true,
+									"typeConversionSettings": {
+										"allowDataTruncation": true,
+										"treatBooleanAsNumber": false
+									}
+								}
+							},
+							"inputs": [
+								{
+									"referenceName": "DS_Briggs_MST",
+									"type": "DatasetReference"
+								}
+							],
+							"outputs": [
+								{
+									"referenceName": "Briggs_MDW",
+									"type": "DatasetReference",
+									"parameters": {
+										"schema_name": {
+											"value": "@activity('Lookup_Incremental').output.firstRow.TargetStageTableSchema",
+											"type": "Expression"
+										},
+										"table_name": {
+											"value": "@activity('Lookup_Incremental').output.firstRow.TargetStageTableName",
+											"type": "Expression"
+										}
+									}
+								}
+							]
+						}
+					]
+				}
+			},
+			{
+				"name": "ForEach_Full_Load",
+				"type": "ForEach",
+				"dependsOn": [
+					{
+						"activity": "Lookup2_Full",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"userProperties": [],
+				"typeProperties": {
+					"items": {
+						"value": "@activity('Lookup2_Full').output.value",
+						"type": "Expression"
+					},
+					"activities": [
+						{
+							"name": "Lookup_Full",
+							"type": "Lookup",
+							"dependsOn": [],
+							"policy": {
+								"timeout": "7.00:00:00",
+								"retry": 0,
+								"retryIntervalInSeconds": 30,
+								"secureOutput": false,
+								"secureInput": false
+							},
+							"userProperties": [],
+							"typeProperties": {
+								"source": {
+									"type": "AzureSqlSource",
+									"sqlReaderQuery": {
+										"value": "@concat('select SourceQuery=''select '' +columnList+ '' from ''+ sourceDB+''.''+SourceSchemaName+''.''+SourcetableName\n,SourceDB\n,TargetContainer\n, TargetPath, TargetFile, FileFormat,DateField,LastDate,targetstagetableschema,targetstagetablename\nfrom dbo.control_table\nwhere ID= ',item().ID_Full)",
+										"type": "Expression"
+									},
+									"queryTimeout": "02:00:00",
+									"partitionOption": "None"
+								},
+								"dataset": {
+									"referenceName": "Briggs_MDW",
+									"type": "DatasetReference",
+									"parameters": {
+										"schema_name": "dbo",
+										"table_name": "user"
+									}
+								}
+							}
+						},
+						{
+							"name": "Copy_Briggs_Full_ADLS",
+							"type": "Copy",
+							"dependsOn": [
+								{
+									"activity": "Lookup_Full",
+									"dependencyConditions": [
+										"Succeeded"
+									]
+								}
+							],
+							"policy": {
+								"timeout": "7.00:00:00",
+								"retry": 0,
+								"retryIntervalInSeconds": 30,
+								"secureOutput": false,
+								"secureInput": false
+							},
+							"userProperties": [],
+							"typeProperties": {
+								"source": {
+									"type": "SqlServerSource",
+									"sqlReaderQuery": {
+										"value": "@activity('Lookup_Full').output.firstRow.SourceQuery\n",
+										"type": "Expression"
+									},
+									"queryTimeout": "02:00:00",
+									"partitionOption": "None"
+								},
+								"sink": {
+									"type": "AzureSqlSink",
+									"preCopyScript": {
+										"value": "@{concat('truncate table ',activity('Lookup_Full').output.firstRow.TargetStageTableSchema,'.',activity('Lookup_Full').output.firstRow.TargetStageTableName)}",
+										"type": "Expression"
+									},
+									"disableMetricsCollection": false
+								},
+								"enableStaging": false,
+								"translator": {
+									"type": "TabularTranslator",
+									"typeConversion": true,
+									"typeConversionSettings": {
+										"allowDataTruncation": true,
+										"treatBooleanAsNumber": false
+									}
+								}
+							},
+							"inputs": [
+								{
+									"referenceName": "DS_Briggs_MST",
+									"type": "DatasetReference"
+								}
+							],
+							"outputs": [
+								{
+									"referenceName": "Briggs_MDW",
+									"type": "DatasetReference",
+									"parameters": {
+										"schema_name": {
+											"value": "@activity('Lookup_Full').output.firstRow.TargetStageTableSchema",
+											"type": "Expression"
+										},
+										"table_name": {
+											"value": "@activity('Lookup_Full').output.firstRow.TargetStageTableName",
+											"type": "Expression"
+										}
+									}
+								}
+							]
+						},
+						{
+							"name": "Copy_Briggs_Full_ADLS_New",
+							"type": "Copy",
+							"dependsOn": [
+								{
+									"activity": "Copy_Briggs_Full_ADLS",
+									"dependencyConditions": [
+										"Failed"
+									]
+								}
+							],
+							"policy": {
+								"timeout": "7.00:00:00",
+								"retry": 0,
+								"retryIntervalInSeconds": 30,
+								"secureOutput": false,
+								"secureInput": false
+							},
+							"userProperties": [],
+							"typeProperties": {
+								"source": {
+									"type": "SqlServerSource",
+									"sqlReaderQuery": {
+										"value": "@activity('Lookup_Full').output.firstRow.SourceQuery\n",
+										"type": "Expression"
+									},
+									"queryTimeout": "02:00:00",
+									"partitionOption": "None"
+								},
+								"sink": {
+									"type": "AzureSqlSink",
+									"writeBehavior": "insert",
+									"sqlWriterUseTableLock": false,
+									"tableOption": "autoCreate",
+									"disableMetricsCollection": false
+								},
+								"enableStaging": false,
+								"translator": {
+									"type": "TabularTranslator",
+									"typeConversion": true,
+									"typeConversionSettings": {
+										"allowDataTruncation": true,
+										"treatBooleanAsNumber": false
+									}
+								}
+							},
+							"inputs": [
+								{
+									"referenceName": "DS_Briggs_MST",
+									"type": "DatasetReference"
+								}
+							],
+							"outputs": [
+								{
+									"referenceName": "Briggs_MDW",
+									"type": "DatasetReference",
+									"parameters": {
+										"schema_name": {
+											"value": "@activity('Lookup_Full').output.firstRow.TargetStageTableSchema",
+											"type": "Expression"
+										},
+										"table_name": {
+											"value": "@activity('Lookup_Full').output.firstRow.TargetStageTableName",
+											"type": "Expression"
+										}
+									}
+								}
+							]
+						}
+					]
+				}
+			},
+			{
+				"name": "ForEach_Proc_Inc",
+				"type": "ForEach",
+				"dependsOn": [
+					{
+						"activity": "ForEach_Incremental_Load",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"userProperties": [],
+				"typeProperties": {
+					"items": {
+						"value": "@activity('Lookup1_Incremental').output.value",
+						"type": "Expression"
+					},
+					"batchCount": 5,
+					"activities": [
+						{
+							"name": "Stored procedure1_copy1",
+							"type": "SqlServerStoredProcedure",
+							"dependsOn": [],
+							"policy": {
+								"timeout": "7.00:00:00",
+								"retry": 0,
+								"retryIntervalInSeconds": 30,
+								"secureOutput": false,
+								"secureInput": false
+							},
+							"userProperties": [],
+							"typeProperties": {
+								"storedProcedureName": "[dbo].[USP_Control_Table_LastDate]",
+								"storedProcedureParameters": {
+									"id_I_F": {
+										"value": {
+											"value": "@item().ID_Inc",
+											"type": "Expression"
+										},
+										"type": "Int32"
+									}
+								}
+							},
+							"linkedServiceName": {
+								"referenceName": "DS_MDW_SP",
+								"type": "LinkedServiceReference"
+							}
+						}
+					]
+				}
+			},
+			{
+				"name": "ForEach_Proc_Full",
+				"type": "ForEach",
+				"dependsOn": [
+					{
+						"activity": "ForEach_Full_Load",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"userProperties": [],
+				"typeProperties": {
+					"items": {
+						"value": "@activity('Lookup2_Full').output.value",
+						"type": "Expression"
+					},
+					"batchCount": 5,
+					"activities": [
+						{
+							"name": "Stored procedure1",
+							"type": "SqlServerStoredProcedure",
+							"dependsOn": [],
+							"policy": {
+								"timeout": "7.00:00:00",
+								"retry": 0,
+								"retryIntervalInSeconds": 30,
+								"secureOutput": false,
+								"secureInput": false
+							},
+							"userProperties": [],
+							"typeProperties": {
+								"storedProcedureName": "[dbo].[USP_Control_Table_LastDate]",
+								"storedProcedureParameters": {
+									"id_I_F": {
+										"value": {
+											"value": "@item().ID_Full",
+											"type": "Expression"
+										},
+										"type": "Int32"
+									}
+								}
+							},
+							"linkedServiceName": {
+								"referenceName": "DS_MDW_SP",
+								"type": "LinkedServiceReference"
+							}
+						}
+					]
+				}
+			}
+		],
+		"folder": {
+			"name": "Briggs Data Load Theme wise"
+		},
+		"annotations": [],
+		"lastPublishTime": "2022-04-01T15:31:50Z"
+	},
+	"type": "Microsoft.Synapse/workspaces/pipelines"
+}

@@ -1,0 +1,13 @@
+{
+	"name": "NDS_POR",
+	"properties": {
+		"linkedServiceName": {
+			"referenceName": "LS_POR",
+			"type": "LinkedServiceReference"
+		},
+		"annotations": [],
+		"type": "SqlServerTable",
+		"schema": []
+	},
+	"type": "Microsoft.Synapse/workspaces/datasets"
+}

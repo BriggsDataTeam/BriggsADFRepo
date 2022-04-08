@@ -1,0 +1,198 @@
+{
+	"name": "PL_Generic_Loop_ADLS_POR",
+	"properties": {
+		"activities": [
+			{
+				"name": "LoopThroughTables",
+				"type": "ForEach",
+				"dependsOn": [
+					{
+						"activity": "lkp_GetTableID",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"userProperties": [],
+				"typeProperties": {
+					"items": {
+						"value": "@activity('lkp_GetTableID').output.value",
+						"type": "Expression"
+					},
+					"isSequential": false,
+					"batchCount": 8,
+					"activities": [
+						{
+							"name": "Exec PL_Generic_Copy_ADLS",
+							"type": "ExecutePipeline",
+							"dependsOn": [],
+							"userProperties": [],
+							"typeProperties": {
+								"pipeline": {
+									"referenceName": "PL_Generic_Copy_ADLS_POR",
+									"type": "PipelineReference"
+								},
+								"waitOnCompletion": true,
+								"parameters": {
+									"IDValue": {
+										"value": "@item().ID",
+										"type": "Expression"
+									},
+									"ParentAuditID": {
+										"value": "@pipeline().parameters.ParentAuditID",
+										"type": "Expression"
+									}
+								}
+							}
+						},
+						{
+							"name": "Lkp_Failed",
+							"type": "Lookup",
+							"dependsOn": [
+								{
+									"activity": "Sp_ExecFailureAudit",
+									"dependencyConditions": [
+										"Succeeded"
+									]
+								}
+							],
+							"policy": {
+								"timeout": "7.00:00:00",
+								"retry": 0,
+								"retryIntervalInSeconds": 30,
+								"secureOutput": false,
+								"secureInput": false
+							},
+							"userProperties": [],
+							"typeProperties": {
+								"source": {
+									"type": "AzureSqlSource",
+									"sqlReaderQuery": "THROW 60000,'Inner activity failed default, failure for outer activity.',1;",
+									"queryTimeout": "02:00:00",
+									"partitionOption": "None"
+								},
+								"dataset": {
+									"referenceName": "Briggs_MDW",
+									"type": "DatasetReference",
+									"parameters": {
+										"schema_name": "dbo",
+										"table_name": "user"
+									}
+								}
+							}
+						},
+						{
+							"name": "Sp_ExecFailureAudit",
+							"type": "SqlServerStoredProcedure",
+							"dependsOn": [
+								{
+									"activity": "Exec PL_Generic_Copy_ADLS",
+									"dependencyConditions": [
+										"Failed"
+									]
+								}
+							],
+							"policy": {
+								"timeout": "7.00:00:00",
+								"retry": 0,
+								"retryIntervalInSeconds": 30,
+								"secureOutput": false,
+								"secureInput": false
+							},
+							"userProperties": [],
+							"typeProperties": {
+								"storedProcedureName": "[dbo].[proc_UpdateAuditLog]",
+								"storedProcedureParameters": {
+									"AuditID": {
+										"value": {
+											"value": "@pipeline().parameters.ParentAuditID",
+											"type": "Expression"
+										},
+										"type": "Int32"
+									},
+									"DataLakePath": {
+										"value": null,
+										"type": "String"
+									},
+									"PipelineRunID": {
+										"value": {
+											"value": "@pipeline().RunId",
+											"type": "Expression"
+										},
+										"type": "String"
+									},
+									"RowsRead": {
+										"value": null,
+										"type": "Int64"
+									},
+									"Status": {
+										"value": "Failed",
+										"type": "String"
+									}
+								}
+							},
+							"linkedServiceName": {
+								"referenceName": "AzureSqlDatabase1",
+								"type": "LinkedServiceReference"
+							}
+						}
+					]
+				}
+			},
+			{
+				"name": "lkp_GetTableID",
+				"type": "Lookup",
+				"dependsOn": [],
+				"policy": {
+					"timeout": "7.00:00:00",
+					"retry": 0,
+					"retryIntervalInSeconds": 30,
+					"secureOutput": false,
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"source": {
+						"type": "AzureSqlSource",
+						"sqlReaderQuery": "Select Distinct ID From control_table_por Where EnableAction = 1 AND ProcessName = 'AzSQL_ADLS' \nand SourceDB = 'POR'  \norder by 1",
+						"queryTimeout": "02:00:00",
+						"partitionOption": "None"
+					},
+					"dataset": {
+						"referenceName": "Briggs_MDW",
+						"type": "DatasetReference",
+						"parameters": {
+							"schema_name": "dbo",
+							"table_name": "user"
+						}
+					},
+					"firstRowOnly": false
+				}
+			},
+			{
+				"name": "POR_Source_Table_Load",
+				"type": "ExecutePipeline",
+				"dependsOn": [],
+				"userProperties": [],
+				"typeProperties": {
+					"pipeline": {
+						"referenceName": "POR_Source_Table_Load",
+						"type": "PipelineReference"
+					},
+					"waitOnCompletion": true
+				}
+			}
+		],
+		"parameters": {
+			"ParentAuditID": {
+				"type": "int"
+			}
+		},
+		"folder": {
+			"name": "MDP POR DataLoad"
+		},
+		"annotations": [],
+		"lastPublishTime": "2022-03-29T07:20:03Z"
+	},
+	"type": "Microsoft.Synapse/workspaces/pipelines"
+}

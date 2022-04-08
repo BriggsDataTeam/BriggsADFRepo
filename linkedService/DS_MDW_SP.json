@@ -1,0 +1,16 @@
+{
+	"name": "DS_MDW_SP",
+	"type": "Microsoft.Synapse/workspaces/linkedservices",
+	"properties": {
+		"annotations": [],
+		"type": "AzureSqlDW",
+		"typeProperties": {
+			"connectionString": "integrated security=False;encrypt=True;connection timeout=30;data source=briggs-p-wus-syn-01.sql.azuresynapse.net;initial catalog=briggsmdw;user id=sqladminuser",
+			"encryptedCredential": "ew0KICAiVmVyc2lvbiI6ICIyMDE3LTExLTMwIiwNCiAgIlByb3RlY3Rpb25Nb2RlIjogIktleSIsDQogICJTZWNyZXRDb250ZW50VHlwZSI6ICJQbGFpbnRleHQiLA0KICAiQ3JlZGVudGlhbElkIjogIlNZTkFQU0VAQzE0QzQ3NkUtNEVFNC00M0IyLTgzNjctRTBFMTkzNjY4MEE0XzBiOWI5MmFiLTZkNzgtNGY2Yy1iMmZmLTdkZjcyMGI3ZmUzMiINCn0="
+		},
+		"connectVia": {
+			"referenceName": "AutoResolveIntegrationRuntime",
+			"type": "IntegrationRuntimeReference"
+		}
+	}
+}

@@ -1,0 +1,16 @@
+{
+	"name": "LS_Briggs_AX",
+	"type": "Microsoft.Synapse/workspaces/linkedservices",
+	"properties": {
+		"annotations": [],
+		"type": "SqlServer",
+		"typeProperties": {
+			"connectionString": "integrated security=False;data source=10.10.2.48;initial catalog=BriggsAX;user id=local",
+			"encryptedCredential": "eyJDcmVkZW50aWFsSWQiOiI4MDgxNzBkOC1hZmExLTRjZGUtYWRlMC04MjQ1NzZjNmY0MGEiLCJWZXJzaW9uIjoiMi4wIiwiQ2xhc3NUeXBlIjoiTWljcm9zb2Z0LkRhdGFQcm94eS5Db3JlLkludGVyU2VydmljZURhdGFDb250cmFjdC5DcmVkZW50aWFsU1UwNkNZMTQifQ=="
+		},
+		"connectVia": {
+			"referenceName": "intrt-IntegrationRuntime",
+			"type": "IntegrationRuntimeReference"
+		}
+	}
+}

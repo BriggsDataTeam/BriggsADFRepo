@@ -1,0 +1,17 @@
+{
+	"name": "NewPOR_test",
+	"type": "Microsoft.Synapse/workspaces/linkedservices",
+	"properties": {
+		"description": "vm-porsql-p00.sammons.tech\n[10.13.5.4]",
+		"annotations": [],
+		"type": "SqlServer",
+		"typeProperties": {
+			"connectionString": "integrated security=False;data source=10.13.5.4;initial catalog=POR;user id=DataTeam",
+			"encryptedCredential": "eyJDcmVkZW50aWFsSWQiOiI2MDhlMTQyMy1iMGQyLTRkZjktYjA3Ni0xODEwMmYwNTcxNWYiLCJWZXJzaW9uIjoiMi4wIiwiQ2xhc3NUeXBlIjoiTWljcm9zb2Z0LkRhdGFQcm94eS5Db3JlLkludGVyU2VydmljZURhdGFDb250cmFjdC5DcmVkZW50aWFsU1UwNkNZMTQifQ=="
+		},
+		"connectVia": {
+			"referenceName": "intrt-IntegrationRuntime",
+			"type": "IntegrationRuntimeReference"
+		}
+	}
+}

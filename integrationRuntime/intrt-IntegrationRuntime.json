@@ -1,0 +1,7 @@
+{
+	"name": "intrt-IntegrationRuntime",
+	"properties": {
+		"type": "SelfHosted",
+		"description": "SHIR installed on data center:  db-intrt-p00"
+	}
+}

@@ -1,0 +1,643 @@
+{
+	"name": "PL_Master_Briggs_Service",
+	"properties": {
+		"activities": [
+			{
+				"name": "Execute Pipeline1",
+				"type": "ExecutePipeline",
+				"dependsOn": [],
+				"userProperties": [],
+				"typeProperties": {
+					"pipeline": {
+						"referenceName": "PL_Generic_Copy_Service",
+						"type": "PipelineReference"
+					},
+					"waitOnCompletion": true
+				}
+			},
+			{
+				"name": "ReportStageProc",
+				"type": "Lookup",
+				"dependsOn": [
+					{
+						"activity": "Execute Pipeline1",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"policy": {
+					"timeout": "7.00:00:00",
+					"retry": 0,
+					"retryIntervalInSeconds": 30,
+					"secureOutput": false,
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"source": {
+						"type": "AzureSqlSource",
+						"sqlReaderQuery": "select  * from dbo.control_table where processsequence = 2 and enableaction = 1 \nand subjectarea='Report Stage Service SP'\norder by id",
+						"queryTimeout": "02:00:00",
+						"partitionOption": "None"
+					},
+					"dataset": {
+						"referenceName": "Briggs_MDW",
+						"type": "DatasetReference",
+						"parameters": {
+							"schema_name": "dbo",
+							"table_name": "user"
+						}
+					},
+					"firstRowOnly": false
+				}
+			},
+			{
+				"name": "ForEach_Stage",
+				"type": "ForEach",
+				"dependsOn": [
+					{
+						"activity": "ReportStageProc",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"userProperties": [],
+				"typeProperties": {
+					"items": {
+						"value": "@activity('ReportStageProc').output.value",
+						"type": "Expression"
+					},
+					"activities": [
+						{
+							"name": "Stored procedure1",
+							"type": "SqlServerStoredProcedure",
+							"dependsOn": [],
+							"policy": {
+								"timeout": "7.00:00:00",
+								"retry": 0,
+								"retryIntervalInSeconds": 30,
+								"secureOutput": false,
+								"secureInput": false
+							},
+							"userProperties": [],
+							"typeProperties": {
+								"storedProcedureName": {
+									"value": "@item().sourcetablename",
+									"type": "Expression"
+								}
+							},
+							"linkedServiceName": {
+								"referenceName": "DS_MDW_SP",
+								"type": "LinkedServiceReference"
+							}
+						}
+					]
+				}
+			},
+			{
+				"name": "ReportFactProc",
+				"type": "Lookup",
+				"dependsOn": [
+					{
+						"activity": "ForEach_Stage",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"policy": {
+					"timeout": "7.00:00:00",
+					"retry": 0,
+					"retryIntervalInSeconds": 30,
+					"secureOutput": false,
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"source": {
+						"type": "AzureSqlSource",
+						"sqlReaderQuery": "select  * from dbo.control_table where processsequence = 4 and enableaction = 1 \nand subjectarea='Report Fact Service SP'\norder by id",
+						"queryTimeout": "02:00:00",
+						"partitionOption": "None"
+					},
+					"dataset": {
+						"referenceName": "Briggs_MDW",
+						"type": "DatasetReference",
+						"parameters": {
+							"schema_name": "dbo",
+							"table_name": "user"
+						}
+					},
+					"firstRowOnly": false
+				}
+			},
+			{
+				"name": "ForEach_Fact",
+				"type": "ForEach",
+				"dependsOn": [
+					{
+						"activity": "ReportFactProc",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					},
+					{
+						"activity": "Stage_Service_History_By_Make",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"userProperties": [],
+				"typeProperties": {
+					"items": {
+						"value": "@activity('ReportFactProc').output.value",
+						"type": "Expression"
+					},
+					"activities": [
+						{
+							"name": "Stored procedure",
+							"type": "SqlServerStoredProcedure",
+							"dependsOn": [],
+							"policy": {
+								"timeout": "7.00:00:00",
+								"retry": 0,
+								"retryIntervalInSeconds": 30,
+								"secureOutput": false,
+								"secureInput": false
+							},
+							"userProperties": [],
+							"typeProperties": {
+								"storedProcedureName": {
+									"value": "@item().sourcetablename",
+									"type": "Expression"
+								}
+							},
+							"linkedServiceName": {
+								"referenceName": "DS_MDW_SP",
+								"type": "LinkedServiceReference"
+							}
+						}
+					]
+				}
+			},
+			{
+				"name": "Stage_Service_History_By_Make",
+				"type": "Copy",
+				"dependsOn": [],
+				"policy": {
+					"timeout": "7.00:00:00",
+					"retry": 0,
+					"retryIntervalInSeconds": 30,
+					"secureOutput": false,
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"source": {
+						"type": "SqlServerSource",
+						"sqlReaderQuery": "declare @hours as table(\n\n\t\tinvoiceid nvarchar(25)\n\t\t,qty int\n)\n\ninsert into @hours\n\nselect \npij.projinvoiceid\n,sum(emp.qty) 'qty'\nfrom  PROJINVOICEJOUR pij \ninner join projinvoiceempl emp on emp.projinvoiceid = pij.projinvoiceid\nwhere year(pij.INVOICEDATE)>='2020'-- between '2020-01-01' and '2022-02-01' --@startdate and @enddate\ngroup by pij.projinvoiceid;\n\n;with labor_cte(projid,money,date)\nas(\n\tselect PROJID,sum(LINEAMOUNT),max(PROJINVOICEEMPL.TRANSDATE)\n\tfrom PROJINVOICEEMPL\n\tgroup by PROJID\n),parts_cte(projid,money)\nas(\n\t\tselect svcCAll.PROJID,sum(pit.LINEAMOUNT) from PROJINVOICEITEM pit\n\tinner join XAP_SVCSEGMENTTABLE svcSeg on svcSeg.PROJID = pit.PROJID\n\tinner join XAP_SVCCALLTABLE svcCall on svcCall.RECID = svcSeg.SVCCALLID\n\tinner join ECORESPRODUCT eco on eco.displayproductnumber = pit.itemid\n\tinner join XAP_NPRITEM npr on eco.RECID = npr.PRODUCT and npr.ITEMDATAAREAID = 'BRG'\n\twhere (SOSRECID <> 0 or pit.ITEMID like '%sublet%')\n\tgroup by  svcCAll.PROJID\n),gm_cte(recid,equipmentid)\nas(\n\tselect max(svcT.RECID),svcL.EQUIPMENTID\n\tfrom XAP_SVCCONTRACTLINE svcL \n\tinner join XAP_SVCCONTRACTTABLE svcT on svcL.CONTRACTID = svcT.RECID\n\twhere svcL.EQUIPMENTID is not null \n\tand svcL.EQUIPMENTID <> 0\n\tand svcL.CONTRACTSTATUS = 1\n\tand svcT.CALLTYPEID = 5637144582\n\tgroup by svcL.EQUIPMENTID\n\n),smu_cte(recid,svcid)\nas(\nselect max(recid),DOCUMENTREFERENCE\n from  XAP_EQUIPMENTUSAGEHISTORY a \n where a.SOURCE = 3\n group by DOCUMENTREFERENCE\n\n),lastlabor_cte(projid,money,date)\nas(\n\tselect svcCAll.PROJID\n\t,sum(QTY* SALESPRICE) 'amount'\n\t,max(pjt.TRANSDATE)'date'\n\tfrom ProjJournalTrans pjt\n\tinner join XAP_SVCSEGMENTTABLE svcSeg on svcSeg.PROJID = pjt.PROJID\n\tinner join XAP_SVCCALLTABLE svcCall on svcCall.RECID = svcSeg.SVCCALLID\n\tgroup by svcCAll.PROJID\n)\n\n\n\nselect distinct\t\n\t\tsvc.inventlocationid\n\t\t,pij.invoiceaccount 'bill_to_number'\n\t\t,dirbt.name 'bill_to_name'\n\t\t,invcust.custgroup\n\t\t,svc.custaccount\n\t\t,svc.custname\n--\t\t,svctype.callstatusid, \n        ,svctypetable.calltypeid\n\t\t,pij.projinvoiceid\n\t\t,pij.invoicedate\n\t\t,eq.equipmentid\n\t\t,eq.inventserialid\n\t\t,make.manufacturerid\n\t\t,model.typeid\n\t\t,cast(isnull(labor_cte.money,0.00)as decimal(10,2)) 'labor'\n\t\t,cast(isnull(parts_cte.money,0.00) as decimal(10,2)) 'parts'\n\t\t,cast(pij.INVOICEAMOUNT-((isnull(labor_cte.money,0.00) + isnull(parts_cte.money,0.00) + (pij.SUMTAX))) as decimal(10,2)) 'misc'\n\t\t,cast(pij.SUMTAX as decimal(10,2)) 'tax'\n\t\t,cast(pij.INVOICEAMOUNT as decimal(10,2)) 'invoiceamount'\n\t\t,cast(replace(replace(substring(svc.SUBJECT + ' ' + svcComment.INCIDENT,1,40),char(10),''),char(13),'')as nvarchar(4000))   'comment_preview'\n\t\t,cast(replace(replace(svc.SUBJECT + ' ' + svcComment.INCIDENT,char(10),''),char(13),'') as nvarchar(4000)) 'comments'\n\t\t,case \n\t\t\twhen invCust.CUSTGROUP like 'REV%' then 0\n\t\t\twhen invCust.CUSTGROUP = 'WARRANTY' then 1\n\t\t\twhen invCust.CUSTGROUP = 'INTERDEPT' then 2\n\t\t\telse 10\n\t\tend 'sort'\n\t\t,svc.svccallid\n\t\t,smu.meterreading\n\t\t,smu.createddatetime\n\t\t,svc.createddatetime 'svccreatedate'\n\t\t,svc.ponumber\n\t\t,wrker.personnelnumber\n\t\t,labor_cte.date\n\t\t,ddv.displayvalue\n\t\t,ddv.dimensionattributeid\n\t\t,svchours.qty 'hours'\nFROM dbo.XAP_SVCCALLTABLE svc \nLEFT JOIN dbo.XAP_SVCCALLREASONCODES svcReason ON svc.CALLREASONCODE = svcReason.RECID \nLEFT JOIN dbo.XAP_SVCCALLTYPETABLE svcTypeTable ON svc.CALLTYPEID = svcTypeTable.RECID \nLEFT JOIN dbo.XAP_SVCCALLTYPELINE svcType ON svc.CALLSTATUS = svcType.RECID\nleft join parts_cte on parts_cte.projid = svc.SVCCALLID\nleft join xap_equipmenttable eq on eq.recid = svc.equipmentid\nleft join XAP_MACHINEMANUFACTURER make on eq.MACHINEMANUFACTURER = make.RECID\nleft join XAP_MACHINETYPE model on eq.MACHINETYPE= model.RECID\ninner join PROJINVOICEJOUR pij on pij.SVCCALLID = svc.RECID\nleft join CUSTTABLE invCust on invCust.ACCOUNTNUM = pij.INVOICEACCOUNT\nleft join DIRPARTYTABLE dirBT on dirBT.RECID = invCust.PARTY\nleft join XAP_SVCREPORTINGTABLE svcComment on svcComment.RECID = svc.REPORTINGTABLEREFERENCE\nleft join XAP_SVCSEGMENTTABLE svcSeg on svcSeg.SVCCALLID = svc.RECID\nLEFT join labor_cte on labor_cte.projid = svcSeg.PROJID\nleft join smu_cte on smu_cte.svcid = svc.RECID\nleft join XAP_EQUIPMENTUSAGEHISTORY smu on smu.SOURCE =3 and smu.RECID = smu_cte.recid\nleft join HCMWORKER wrker on wrker.recid = svc.WORKERID\nleft join DEFAULTDIMENSIONVIEW ddv on ddv.DEFAULTDIMENSION = pij.DEFAULTDIMENSION and ddv.DIMENSIONATTRIBUTEID = 5637145333\nleft join @hours svchours on svchours.invoiceid = pij.projinvoiceid\nWHERE        \nyear(pij.INVOICEDATE)>='2020'--- between '2020-01-01' and '2022-02-01' --@startdate and @enddate\n--and  ddv.DISPLAYVALUE in (@branch)\n--and make.MANUFACTURERID in (@make)\n--and invCust.CUSTGROUP in (@custgroup)",
+						"queryTimeout": "02:00:00",
+						"partitionOption": "None"
+					},
+					"sink": {
+						"type": "AzureSqlSink",
+						"preCopyScript": "truncate table briggs.Stage_Service_History_By_Make",
+						"disableMetricsCollection": false
+					},
+					"enableStaging": false,
+					"translator": {
+						"type": "TabularTranslator",
+						"mappings": [
+							{
+								"source": {
+									"name": "inventlocationid",
+									"type": "String",
+									"physicalType": "nvarchar"
+								},
+								"sink": {
+									"name": "INVENTLOCATIONID",
+									"type": "String",
+									"physicalType": "varchar"
+								}
+							},
+							{
+								"source": {
+									"name": "bill_to_number",
+									"type": "String",
+									"physicalType": "nvarchar"
+								},
+								"sink": {
+									"name": "Bill_To_Number",
+									"type": "String",
+									"physicalType": "varchar"
+								}
+							},
+							{
+								"source": {
+									"name": "bill_to_name",
+									"type": "String",
+									"physicalType": "nvarchar"
+								},
+								"sink": {
+									"name": "Bill_To_Name",
+									"type": "String",
+									"physicalType": "varchar"
+								}
+							},
+							{
+								"source": {
+									"name": "custgroup",
+									"type": "String",
+									"physicalType": "nvarchar"
+								},
+								"sink": {
+									"name": "CUSTGROUP",
+									"type": "String",
+									"physicalType": "varchar"
+								}
+							},
+							{
+								"source": {
+									"name": "custaccount",
+									"type": "String",
+									"physicalType": "nvarchar"
+								},
+								"sink": {
+									"name": "CUSTACCOUNT",
+									"type": "String",
+									"physicalType": "varchar"
+								}
+							},
+							{
+								"source": {
+									"name": "custname",
+									"type": "String",
+									"physicalType": "nvarchar"
+								},
+								"sink": {
+									"name": "CUSTNAME",
+									"type": "String",
+									"physicalType": "varchar"
+								}
+							},
+							{
+								"source": {
+									"name": "calltypeid",
+									"type": "String",
+									"physicalType": "nvarchar"
+								},
+								"sink": {
+									"name": "CALLTYPEID",
+									"type": "String",
+									"physicalType": "varchar"
+								}
+							},
+							{
+								"source": {
+									"name": "projinvoiceid",
+									"type": "String",
+									"physicalType": "nvarchar"
+								},
+								"sink": {
+									"name": "PROJINVOICEID",
+									"type": "String",
+									"physicalType": "varchar"
+								}
+							},
+							{
+								"source": {
+									"name": "invoicedate",
+									"type": "DateTime",
+									"physicalType": "datetime"
+								},
+								"sink": {
+									"name": "INVOICEDATE",
+									"type": "DateTime",
+									"physicalType": "datetime2"
+								}
+							},
+							{
+								"source": {
+									"name": "equipmentid",
+									"type": "String",
+									"physicalType": "nvarchar"
+								},
+								"sink": {
+									"name": "equipmentid",
+									"type": "String",
+									"physicalType": "varchar"
+								}
+							},
+							{
+								"source": {
+									"name": "inventserialid",
+									"type": "String",
+									"physicalType": "nvarchar"
+								},
+								"sink": {
+									"name": "INVENTSERIALID",
+									"type": "String",
+									"physicalType": "varchar"
+								}
+							},
+							{
+								"source": {
+									"name": "manufacturerid",
+									"type": "String",
+									"physicalType": "nvarchar"
+								},
+								"sink": {
+									"name": "MANUFACTURERID",
+									"type": "String",
+									"physicalType": "varchar"
+								}
+							},
+							{
+								"source": {
+									"name": "typeid",
+									"type": "String",
+									"physicalType": "nvarchar"
+								},
+								"sink": {
+									"name": "TYPEID",
+									"type": "String",
+									"physicalType": "varchar"
+								}
+							},
+							{
+								"source": {
+									"name": "labor",
+									"type": "Decimal",
+									"physicalType": "decimal",
+									"scale": 2,
+									"precision": 10
+								},
+								"sink": {
+									"name": "Labor",
+									"type": "Decimal",
+									"physicalType": "decimal",
+									"scale": 2,
+									"precision": 10
+								}
+							},
+							{
+								"source": {
+									"name": "parts",
+									"type": "Decimal",
+									"physicalType": "decimal",
+									"scale": 2,
+									"precision": 10
+								},
+								"sink": {
+									"name": "Parts",
+									"type": "Decimal",
+									"physicalType": "decimal",
+									"scale": 2,
+									"precision": 10
+								}
+							},
+							{
+								"source": {
+									"name": "misc",
+									"type": "Decimal",
+									"physicalType": "decimal",
+									"scale": 2,
+									"precision": 10
+								},
+								"sink": {
+									"name": "Misc",
+									"type": "Decimal",
+									"physicalType": "decimal",
+									"scale": 2,
+									"precision": 10
+								}
+							},
+							{
+								"source": {
+									"name": "tax",
+									"type": "Decimal",
+									"physicalType": "decimal",
+									"scale": 2,
+									"precision": 10
+								},
+								"sink": {
+									"name": "Tax",
+									"type": "Decimal",
+									"physicalType": "decimal",
+									"scale": 2,
+									"precision": 10
+								}
+							},
+							{
+								"source": {
+									"name": "invoiceamount",
+									"type": "Decimal",
+									"physicalType": "decimal",
+									"scale": 2,
+									"precision": 10
+								},
+								"sink": {
+									"name": "INVOICEAMOUNT",
+									"type": "Decimal",
+									"physicalType": "decimal",
+									"scale": 2,
+									"precision": 10
+								}
+							},
+							{
+								"source": {
+									"name": "comment_preview",
+									"type": "String",
+									"physicalType": "nvarchar"
+								},
+								"sink": {
+									"name": "Comment_Preview",
+									"type": "String",
+									"physicalType": "varchar"
+								}
+							},
+							{
+								"source": {
+									"name": "comments",
+									"type": "String",
+									"physicalType": "nvarchar"
+								},
+								"sink": {
+									"name": "Comments",
+									"type": "String",
+									"physicalType": "varchar"
+								}
+							},
+							{
+								"source": {
+									"name": "sort",
+									"type": "Int32",
+									"physicalType": "int"
+								},
+								"sink": {
+									"name": "sort",
+									"type": "Int32",
+									"physicalType": "int"
+								}
+							},
+							{
+								"source": {
+									"name": "svccallid",
+									"type": "String",
+									"physicalType": "nvarchar"
+								},
+								"sink": {
+									"name": "SVCCALLID",
+									"type": "String",
+									"physicalType": "varchar"
+								}
+							},
+							{
+								"source": {
+									"name": "meterreading",
+									"type": "Decimal",
+									"physicalType": "decimal",
+									"scale": 16,
+									"precision": 32
+								},
+								"sink": {
+									"name": "METERREADING",
+									"type": "Decimal",
+									"physicalType": "decimal",
+									"scale": 16,
+									"precision": 32
+								}
+							},
+							{
+								"source": {
+									"name": "createddatetime",
+									"type": "DateTime",
+									"physicalType": "datetime"
+								},
+								"sink": {
+									"name": "CREATEDDATETIME",
+									"type": "DateTime",
+									"physicalType": "datetime2"
+								}
+							},
+							{
+								"source": {
+									"name": "svccreatedate",
+									"type": "DateTime",
+									"physicalType": "datetime"
+								},
+								"sink": {
+									"name": "svcCreateDate",
+									"type": "DateTime",
+									"physicalType": "datetime2"
+								}
+							},
+							{
+								"source": {
+									"name": "ponumber",
+									"type": "String",
+									"physicalType": "nvarchar"
+								},
+								"sink": {
+									"name": "PONUMBER",
+									"type": "String",
+									"physicalType": "varchar"
+								}
+							},
+							{
+								"source": {
+									"name": "personnelnumber",
+									"type": "String",
+									"physicalType": "nvarchar"
+								},
+								"sink": {
+									"name": "PERSONNELNUMBER",
+									"type": "String",
+									"physicalType": "varchar"
+								}
+							},
+							{
+								"source": {
+									"name": "date",
+									"type": "DateTime",
+									"physicalType": "datetime"
+								},
+								"sink": {
+									"name": "date",
+									"type": "DateTime",
+									"physicalType": "datetime2"
+								}
+							},
+							{
+								"source": {
+									"name": "displayvalue",
+									"type": "String",
+									"physicalType": "nvarchar"
+								},
+								"sink": {
+									"name": "DISPLAYVALUE",
+									"type": "String",
+									"physicalType": "varchar"
+								}
+							},
+							{
+								"source": {
+									"name": "dimensionattributeid",
+									"type": "Int64",
+									"physicalType": "bigint"
+								},
+								"sink": {
+									"name": "DIMENSIONATTRIBUTEID",
+									"type": "Int64",
+									"physicalType": "bigint"
+								}
+							},
+							{
+								"source": {
+									"name": "hours",
+									"type": "Int32",
+									"physicalType": "int"
+								},
+								"sink": {
+									"name": "Hours",
+									"type": "Int32",
+									"physicalType": "int"
+								}
+							}
+						],
+						"typeConversion": true,
+						"typeConversionSettings": {
+							"allowDataTruncation": true,
+							"treatBooleanAsNumber": false
+						}
+					}
+				},
+				"inputs": [
+					{
+						"referenceName": "Briggs_MST",
+						"type": "DatasetReference"
+					}
+				],
+				"outputs": [
+					{
+						"referenceName": "Briggs_MDW",
+						"type": "DatasetReference",
+						"parameters": {
+							"schema_name": "Briggs",
+							"table_name": "Stage_Service_History_By_Make"
+						}
+					}
+				]
+			}
+		],
+		"folder": {
+			"name": "Briggs Data Load Theme wise"
+		},
+		"annotations": [],
+		"lastPublishTime": "2022-02-16T07:47:15Z"
+	},
+	"type": "Microsoft.Synapse/workspaces/pipelines"
+}

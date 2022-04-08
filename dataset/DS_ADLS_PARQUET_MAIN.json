@@ -1,0 +1,191 @@
+{
+	"name": "DS_ADLS_PARQUET_MAIN",
+	"properties": {
+		"linkedServiceName": {
+			"referenceName": "LS_ADLS",
+			"type": "LinkedServiceReference"
+		},
+		"parameters": {
+			"FileName": {
+				"type": "string"
+			}
+		},
+		"annotations": [],
+		"type": "Parquet",
+		"typeProperties": {
+			"location": {
+				"type": "AzureBlobFSLocation",
+				"fileName": {
+					"value": "@dataset().FileName",
+					"type": "Expression"
+				},
+				"folderPath": "Data",
+				"fileSystem": "main"
+			},
+			"compressionCodec": "snappy"
+		},
+		"schema": [
+			{
+				"name": "displayvalue",
+				"type": "UTF8"
+			},
+			{
+				"name": "inventlocationid",
+				"type": "UTF8"
+			},
+			{
+				"name": "INVOICEACCOUNT",
+				"type": "UTF8"
+			},
+			{
+				"name": "INVOICEACCOUNTNAME",
+				"type": "UTF8"
+			},
+			{
+				"name": "CUSTGROUP",
+				"type": "UTF8"
+			},
+			{
+				"name": "CUSTACCOUNT",
+				"type": "UTF8"
+			},
+			{
+				"name": "CUSTNAME",
+				"type": "UTF8"
+			},
+			{
+				"name": "CALLTYPEID",
+				"type": "UTF8"
+			},
+			{
+				"name": "PROJINVOICEID",
+				"type": "UTF8"
+			},
+			{
+				"name": "INVOICEDATE",
+				"type": "INT96"
+			},
+			{
+				"name": "equipmentid",
+				"type": "UTF8"
+			},
+			{
+				"name": "INVENTSERIALID",
+				"type": "UTF8"
+			},
+			{
+				"name": "MANUFACTURERID",
+				"type": "UTF8"
+			},
+			{
+				"name": "TYPEID",
+				"type": "UTF8"
+			},
+			{
+				"name": "Labor",
+				"type": "DECIMAL",
+				"precision": 10,
+				"scale": 2
+			},
+			{
+				"name": "Parts",
+				"type": "DECIMAL",
+				"precision": 10,
+				"scale": 2
+			},
+			{
+				"name": "Misc",
+				"type": "DECIMAL",
+				"precision": 10,
+				"scale": 2
+			},
+			{
+				"name": "Tax",
+				"type": "DECIMAL",
+				"precision": 10,
+				"scale": 2
+			},
+			{
+				"name": "INVOICEAMOUNT",
+				"type": "DECIMAL",
+				"precision": 10,
+				"scale": 2
+			},
+			{
+				"name": "Comment_Preview",
+				"type": "UTF8"
+			},
+			{
+				"name": "Comments",
+				"type": "UTF8"
+			},
+			{
+				"name": "sort",
+				"type": "INT32"
+			},
+			{
+				"name": "SVCCALLID",
+				"type": "UTF8"
+			},
+			{
+				"name": "WennsoftId",
+				"type": "UTF8"
+			},
+			{
+				"name": "METERREADING",
+				"type": "DECIMAL",
+				"precision": 32,
+				"scale": 16
+			},
+			{
+				"name": "invoice_created_by",
+				"type": "UTF8"
+			},
+			{
+				"name": "CREATEDDATETIME",
+				"type": "INT96"
+			},
+			{
+				"name": "sc_created_by",
+				"type": "UTF8"
+			},
+			{
+				"name": "svcCreateDate",
+				"type": "INT96"
+			},
+			{
+				"name": "PONUMBER",
+				"type": "UTF8"
+			},
+			{
+				"name": "PERSONNELNUMBER",
+				"type": "UTF8"
+			},
+			{
+				"name": "date",
+				"type": "INT96"
+			},
+			{
+				"name": "batchtemplateid",
+				"type": "UTF8"
+			},
+			{
+				"name": "FINDINGSORCOMMENTS",
+				"type": "UTF8"
+			},
+			{
+				"name": "CORRECTION",
+				"type": "UTF8"
+			},
+			{
+				"name": "SUBJECT",
+				"type": "UTF8"
+			},
+			{
+				"name": "Shiptoaddress",
+				"type": "UTF8"
+			}
+		]
+	},
+	"type": "Microsoft.Synapse/workspaces/datasets"
+}

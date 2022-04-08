@@ -1,0 +1,2852 @@
+{
+	"name": "PL_Master_Briggs_Equipment",
+	"properties": {
+		"activities": [
+			{
+				"name": "Execute Pipeline1",
+				"type": "ExecutePipeline",
+				"dependsOn": [],
+				"userProperties": [],
+				"typeProperties": {
+					"pipeline": {
+						"referenceName": "PL_Generic_Copy_Equipment",
+						"type": "PipelineReference"
+					},
+					"waitOnCompletion": true
+				}
+			},
+			{
+				"name": "ReportStageProc",
+				"type": "Lookup",
+				"dependsOn": [
+					{
+						"activity": "Execute Pipeline1",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"policy": {
+					"timeout": "7.00:00:00",
+					"retry": 0,
+					"retryIntervalInSeconds": 30,
+					"secureOutput": false,
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"source": {
+						"type": "AzureSqlSource",
+						"sqlReaderQuery": "select  * from dbo.control_table where processsequence = 2 and enableaction = 1 \nand subjectarea='Report Stage Equipment SP'\norder by id",
+						"queryTimeout": "02:00:00",
+						"partitionOption": "None"
+					},
+					"dataset": {
+						"referenceName": "Briggs_MDW",
+						"type": "DatasetReference",
+						"parameters": {
+							"schema_name": "dbo",
+							"table_name": "user"
+						}
+					},
+					"firstRowOnly": false
+				}
+			},
+			{
+				"name": "ForEach_Stage",
+				"type": "ForEach",
+				"dependsOn": [
+					{
+						"activity": "ReportStageProc",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"userProperties": [],
+				"typeProperties": {
+					"items": {
+						"value": "@activity('ReportStageProc').output.value",
+						"type": "Expression"
+					},
+					"activities": [
+						{
+							"name": "Stored procedure1",
+							"type": "SqlServerStoredProcedure",
+							"dependsOn": [],
+							"policy": {
+								"timeout": "7.00:00:00",
+								"retry": 0,
+								"retryIntervalInSeconds": 30,
+								"secureOutput": false,
+								"secureInput": false
+							},
+							"userProperties": [],
+							"typeProperties": {
+								"storedProcedureName": {
+									"value": "@item().sourcetablename",
+									"type": "Expression"
+								}
+							},
+							"linkedServiceName": {
+								"referenceName": "DS_MDW_SP",
+								"type": "LinkedServiceReference"
+							}
+						}
+					]
+				}
+			},
+			{
+				"name": "ReportFactProc",
+				"type": "Lookup",
+				"dependsOn": [
+					{
+						"activity": "ForEach_Stage",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					},
+					{
+						"activity": "Stage Equipment VM does not match Fin Dim",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					},
+					{
+						"activity": "Stage_Equipment_Pipeline_Backlog",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					},
+					{
+						"activity": "Stage_Equipment_Invoice_Search",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					},
+					{
+						"activity": "Stage_Equipment_PO",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"policy": {
+					"timeout": "7.00:00:00",
+					"retry": 0,
+					"retryIntervalInSeconds": 30,
+					"secureOutput": false,
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"source": {
+						"type": "AzureSqlSource",
+						"sqlReaderQuery": "select  * from dbo.control_table where processsequence = 4 and enableaction = 1 \nand subjectarea='Report Fact Equipment SP'\norder by id",
+						"queryTimeout": "02:00:00",
+						"partitionOption": "None"
+					},
+					"dataset": {
+						"referenceName": "Briggs_MDW",
+						"type": "DatasetReference",
+						"parameters": {
+							"schema_name": "dbo",
+							"table_name": "user"
+						}
+					},
+					"firstRowOnly": false
+				}
+			},
+			{
+				"name": "ForEach_Fact",
+				"type": "ForEach",
+				"dependsOn": [
+					{
+						"activity": "ReportFactProc",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"userProperties": [],
+				"typeProperties": {
+					"items": {
+						"value": "@activity('ReportFactProc').output.value",
+						"type": "Expression"
+					},
+					"activities": [
+						{
+							"name": "Stored procedure",
+							"type": "SqlServerStoredProcedure",
+							"dependsOn": [],
+							"policy": {
+								"timeout": "7.00:00:00",
+								"retry": 0,
+								"retryIntervalInSeconds": 30,
+								"secureOutput": false,
+								"secureInput": false
+							},
+							"userProperties": [],
+							"typeProperties": {
+								"storedProcedureName": {
+									"value": "@item().sourcetablename",
+									"type": "Expression"
+								}
+							},
+							"linkedServiceName": {
+								"referenceName": "DS_MDW_SP",
+								"type": "LinkedServiceReference"
+							}
+						}
+					]
+				}
+			},
+			{
+				"name": "Stage_Equipment GP Split",
+				"type": "Copy",
+				"dependsOn": [],
+				"policy": {
+					"timeout": "7.00:00:00",
+					"retry": 0,
+					"retryIntervalInSeconds": 30,
+					"secureOutput": false,
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"source": {
+						"type": "SqlServerSource",
+						"sqlReaderQuery": "select distinct pij.PROJINVOICEID,cij.invoiceid,st.INVENTLOCATIONID,\n\tst.SALESID,[dbo].[ENUM2STR]('SALESSTATUS',st.SALESSTATUS) 'AgrementStatus',\n\tcij.INVOICEDATE,st.INVOICEACCOUNT 'Acct #',dir.NAME 'Acct Name',\n\tsvc.SVCCALLID,gjae.TRANSACTIONCURRENCYAMOUNT,gje.SUBLEDGERVOUCHER,eq.EQUIPMENTID,\n\teq.INVENTSERIALID,make.MANUFACTURERID,model.TYPEID\n\tfrom GENERALJOURNALENTRY gje \n\tinner join GENERALJOURNALACCOUNTENTRY gjae on gje.RECID = gjae.GENERALJOURNALENTRY\n\tinner join PROJINVOICEJOUR pij on gje.SUBLEDGERVOUCHER = pij.LEDGERVOUCHER\n\tinner join XAP_SVCCALLTABLE svc on svc.RECID = pij.SVCCALLID\n\tinner join XAP_SVCSEGMENTTABLE svcSeg on svcSeg.SVCCALLID = svc.RECID\n\tinner join XAP_EQUIPMENTTABLE eq on eq.RECID = svcSeg.EQUIPMENTID\n\tinner join XAP_MACHINEMANUFACTURER make on eq.MACHINEMANUFACTURER = make.RECID\n\tinner join XAP_MACHINETYPE model on model.RECID = eq.MACHINETYPE\n\tleft join SALESLINE sl on sl.EQUIPMENTID = eq.EQUIPMENTID\n\tleft join SALESTABLE st on sl.SALESID = st.SALESID\n\tleft join CUSTTABLE cus on cus.ACCOUNTNUM = st.INVOICEACCOUNT\n\tleft join DIRPARTYTABLE dir on dir.RECID = cus.party\n\tleft join CUSTINVOICEJOUR cij on cij.SALESID = st.SALESID\n\twhere gjae.LEDGERACCOUNT like '211254%'",
+						"queryTimeout": "02:00:00",
+						"partitionOption": "None"
+					},
+					"sink": {
+						"type": "AzureSqlSink",
+						"preCopyScript": "Truncate table briggs.Stage_Equipment_GP_Split",
+						"disableMetricsCollection": false
+					},
+					"enableStaging": false,
+					"translator": {
+						"type": "TabularTranslator",
+						"mappings": [
+							{
+								"source": {
+									"name": "PROJINVOICEID",
+									"type": "String",
+									"physicalType": "nvarchar"
+								},
+								"sink": {
+									"name": "PROJINVOICEID",
+									"type": "String",
+									"physicalType": "String"
+								}
+							},
+							{
+								"source": {
+									"name": "invoiceid",
+									"type": "String",
+									"physicalType": "nvarchar"
+								},
+								"sink": {
+									"name": "invoiceid",
+									"type": "String",
+									"physicalType": "String"
+								}
+							},
+							{
+								"source": {
+									"name": "INVENTLOCATIONID",
+									"type": "String",
+									"physicalType": "nvarchar"
+								},
+								"sink": {
+									"name": "INVENTLOCATIONID",
+									"type": "String",
+									"physicalType": "String"
+								}
+							},
+							{
+								"source": {
+									"name": "SALESID",
+									"type": "String",
+									"physicalType": "nvarchar"
+								},
+								"sink": {
+									"name": "SALESID",
+									"type": "String",
+									"physicalType": "String"
+								}
+							},
+							{
+								"source": {
+									"name": "AgrementStatus",
+									"type": "String",
+									"physicalType": "varchar"
+								},
+								"sink": {
+									"name": "AgrementStatus",
+									"type": "String",
+									"physicalType": "String"
+								}
+							},
+							{
+								"source": {
+									"name": "INVOICEDATE",
+									"type": "DateTime",
+									"physicalType": "datetime"
+								},
+								"sink": {
+									"name": "INVOICEDATE",
+									"type": "DateTime",
+									"physicalType": "DateTime"
+								}
+							},
+							{
+								"source": {
+									"name": "Acct #",
+									"type": "String",
+									"physicalType": "nvarchar"
+								},
+								"sink": {
+									"name": "Acct #",
+									"type": "String",
+									"physicalType": "String"
+								}
+							},
+							{
+								"source": {
+									"name": "Acct Name",
+									"type": "String",
+									"physicalType": "nvarchar"
+								},
+								"sink": {
+									"name": "Acct Name",
+									"type": "String",
+									"physicalType": "String"
+								}
+							},
+							{
+								"source": {
+									"name": "SVCCALLID",
+									"type": "String",
+									"physicalType": "nvarchar"
+								},
+								"sink": {
+									"name": "SVCCALLID",
+									"type": "String",
+									"physicalType": "String"
+								}
+							},
+							{
+								"source": {
+									"name": "TRANSACTIONCURRENCYAMOUNT",
+									"type": "Decimal",
+									"physicalType": "decimal",
+									"scale": 16,
+									"precision": 32
+								},
+								"sink": {
+									"name": "TRANSACTIONCURRENCYAMOUNT",
+									"type": "Decimal",
+									"physicalType": "Decimal"
+								}
+							},
+							{
+								"source": {
+									"name": "SUBLEDGERVOUCHER",
+									"type": "String",
+									"physicalType": "nvarchar"
+								},
+								"sink": {
+									"name": "SUBLEDGERVOUCHER",
+									"type": "String",
+									"physicalType": "String"
+								}
+							},
+							{
+								"source": {
+									"name": "EQUIPMENTID",
+									"type": "String",
+									"physicalType": "nvarchar"
+								},
+								"sink": {
+									"name": "EQUIPMENTID",
+									"type": "String",
+									"physicalType": "String"
+								}
+							},
+							{
+								"source": {
+									"name": "INVENTSERIALID",
+									"type": "String",
+									"physicalType": "nvarchar"
+								},
+								"sink": {
+									"name": "INVENTSERIALID",
+									"type": "String",
+									"physicalType": "String"
+								}
+							},
+							{
+								"source": {
+									"name": "MANUFACTURERID",
+									"type": "String",
+									"physicalType": "nvarchar"
+								},
+								"sink": {
+									"name": "MANUFACTURERID",
+									"type": "String",
+									"physicalType": "String"
+								}
+							},
+							{
+								"source": {
+									"name": "TYPEID",
+									"type": "String",
+									"physicalType": "nvarchar"
+								},
+								"sink": {
+									"name": "TYPEID",
+									"type": "String",
+									"physicalType": "String"
+								}
+							}
+						],
+						"typeConversion": true,
+						"typeConversionSettings": {
+							"allowDataTruncation": true,
+							"treatBooleanAsNumber": false
+						}
+					}
+				},
+				"inputs": [
+					{
+						"referenceName": "Briggs_MST",
+						"type": "DatasetReference"
+					}
+				],
+				"outputs": [
+					{
+						"referenceName": "Briggs_MDW",
+						"type": "DatasetReference",
+						"parameters": {
+							"schema_name": "Briggs",
+							"table_name": "Stage_Equipment_GP_Split"
+						}
+					}
+				]
+			},
+			{
+				"name": "Stage_Equipment_PO",
+				"type": "Copy",
+				"dependsOn": [],
+				"policy": {
+					"timeout": "7.00:00:00",
+					"retry": 0,
+					"retryIntervalInSeconds": 30,
+					"secureOutput": false,
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"source": {
+						"type": "SqlServerSource",
+						"sqlReaderQuery": "select \n\tddvBranch.DISPLAYVALUE 'belongsto'\n\t,pt.INVENTLOCATIONID 'branch'\n\t,ddvDivision.DISPLAYVALUE 'division'\n\t,oc.ORDERCLASSID\n\t,eq.EQUIPMENTID\n\t,eq.INVENTSERIALID \n\t,make.MANUFACTURERID 'eqMake'\n\t,model.TYPEID 'eqModel'\n\t,eqTech.MACHINEMANUFACTUREYEAR 'eqYear'\n\t,eqGroup.KINDID 'eqGroup'\n\t,[dbo].[ENUM2STR]('xap_fleettype',eq.FLEETTYPE) 'fleetType'\n\t,eq.ITEMID\n\t,pl.NAME\n\t,[dbo].[ENUM2STR]('XAP_AgreementStatus',eq.AGREEMENTSTATUS) 'agreementStatus'\n\t,[dbo].[ENUM2STR]('XAP_PhysicalStatus',eq.PHYSICALSTATUS) 'physicalStatus'\n\t,pt.PURCHID\n\t,[dbo].[ENUM2STR]('PurchStatus',pt.PURCHSTATUS)  'poStatus'\n\t,pt.ORDERACCOUNT 'Vendor #'\n\t,dir.name 'Vendor Name'\n\t,pt.VENDORREF 'Vendor Ref'\n\t,pl.TAXGROUP\n\t,pl.PURCHUNIT\n\t,cast(pl.PURCHPRICE as decimal(10,2)) 'PURCHPRICE'\n\t,cast(pl.LINEDISC as decimal(10,2)) 'LINEDISC'\n\t,cast(pl.LINEPERCENT  as decimal(10,2)) 'LINEPERCENT'\n\t,cast(pl.LINEAMOUNT  as decimal(10,2)) 'LINEAMOUNT'\n\t,pl.CREATEDDATETIME\n\t,eq.MANUFACTUREDATE\n\t,eq.ESTIMATEDRECEIPTDATE\n\t,eq.RECEIVEDDATE\n\t,wrkerName.NAME 'Orderer'\n\t,pl.INVENTREFID\n\t,cust.accountnum\n\t,custName.NAME 'Cust Name',pt.CREATEDDATETIME Created_Date_Time_Fil\nfrom PURCHLINE pl\n\tinner join PURCHTABLE pt on pl.PURCHID = pt.PURCHID\n\tleft join defaultdimensionview ddvBranch on ddvBranch.DEFAULTDIMENSION = pt.DEFAULTDIMENSION and ddvBranch.DIMENSIONATTRIBUTEID = 5637145333\n\tleft join defaultdimensionview ddvDivision on ddvDivision.DEFAULTDIMENSION = pt.DEFAULTDIMENSION and ddvDivision.DIMENSIONATTRIBUTEID = 5637145328\n\tleft join VENDTABLE vt on vt.accountnum = pt.orderaccount\n\tleft join DIRPARTYTABLE dir on vt.party = dir.recid\n\tleft join XAP_ORDERCLASS oc on pt.ORDERCLASSRECID = oc.RECID\n\tleft join XAP_EQUIPMENTTABLE eq on eq.EQUIPMENTID = isnull(pl.EQUIPMENTID,pt.EQUIPMENTID)\n\tleft join XAP_MACHINEMANUFACTURER make on eq.MACHINEMANUFACTURER = make.RECID\n\tleft join XAP_MACHINETYPE model on model.RECID = eq.MACHINETYPE\n\tleft join XAP_EQUIPMENTTECHNICALINFO eqTech on eqTech.EQUIPMENT = eq.RECID\n\tleft join XAP_MACHINEKIND eqGroup on eqGroup.RECID = model.MACHINEKIND\n\tinner join HCMWORKER wrker on pt.WORKERPURCHPLACER = wrker.RECID\n\tinner join DIRPARTYTABLE wrkerName on wrker.PERSON = wrkerName.RECID\n\tleft join SALESTABLE st on st.SALESID = pl.INVENTREFID\n\tleft join CUSTTABLE cust on cust.accountnum = st.CUSTACCOUNT\n\tleft join DIRPARTYTABLE custName on custName.RECID = cust.party\nwhere oc.ORDERCLASSID = 'EQUIPMENT'\n  and pt.PURCHSTATUS <> 4",
+						"queryTimeout": "02:00:00",
+						"partitionOption": "None"
+					},
+					"sink": {
+						"type": "AzureSqlSink",
+						"preCopyScript": "Truncate table briggs.Stage_Equipment_PO",
+						"disableMetricsCollection": false
+					},
+					"enableStaging": false,
+					"translator": {
+						"type": "TabularTranslator",
+						"mappings": [
+							{
+								"source": {
+									"name": "belongsto",
+									"type": "String",
+									"physicalType": "nvarchar"
+								},
+								"sink": {
+									"name": "belongsto",
+									"type": "String",
+									"physicalType": "String"
+								}
+							},
+							{
+								"source": {
+									"name": "branch",
+									"type": "String",
+									"physicalType": "nvarchar"
+								},
+								"sink": {
+									"name": "branch",
+									"type": "String",
+									"physicalType": "String"
+								}
+							},
+							{
+								"source": {
+									"name": "division",
+									"type": "String",
+									"physicalType": "nvarchar"
+								},
+								"sink": {
+									"name": "division",
+									"type": "String",
+									"physicalType": "String"
+								}
+							},
+							{
+								"source": {
+									"name": "ORDERCLASSID",
+									"type": "String",
+									"physicalType": "nvarchar"
+								},
+								"sink": {
+									"name": "ORDERCLASSID",
+									"type": "String",
+									"physicalType": "String"
+								}
+							},
+							{
+								"source": {
+									"name": "EQUIPMENTID",
+									"type": "String",
+									"physicalType": "nvarchar"
+								},
+								"sink": {
+									"name": "EQUIPMENTID",
+									"type": "String",
+									"physicalType": "String"
+								}
+							},
+							{
+								"source": {
+									"name": "INVENTSERIALID",
+									"type": "String",
+									"physicalType": "nvarchar"
+								},
+								"sink": {
+									"name": "INVENTSERIALID",
+									"type": "String",
+									"physicalType": "String"
+								}
+							},
+							{
+								"source": {
+									"name": "eqMake",
+									"type": "String",
+									"physicalType": "nvarchar"
+								},
+								"sink": {
+									"name": "eqMake",
+									"type": "String",
+									"physicalType": "String"
+								}
+							},
+							{
+								"source": {
+									"name": "eqModel",
+									"type": "String",
+									"physicalType": "nvarchar"
+								},
+								"sink": {
+									"name": "eqModel",
+									"type": "String",
+									"physicalType": "String"
+								}
+							},
+							{
+								"source": {
+									"name": "eqYear",
+									"type": "Int32",
+									"physicalType": "int"
+								},
+								"sink": {
+									"name": "eqYear",
+									"type": "Int32",
+									"physicalType": "Int32"
+								}
+							},
+							{
+								"source": {
+									"name": "eqGroup",
+									"type": "String",
+									"physicalType": "nvarchar"
+								},
+								"sink": {
+									"name": "eqGroup",
+									"type": "String",
+									"physicalType": "String"
+								}
+							},
+							{
+								"source": {
+									"name": "fleetType",
+									"type": "String",
+									"physicalType": "varchar"
+								},
+								"sink": {
+									"name": "fleetType",
+									"type": "String",
+									"physicalType": "String"
+								}
+							},
+							{
+								"source": {
+									"name": "ITEMID",
+									"type": "String",
+									"physicalType": "nvarchar"
+								},
+								"sink": {
+									"name": "ITEMID",
+									"type": "String",
+									"physicalType": "String"
+								}
+							},
+							{
+								"source": {
+									"name": "NAME",
+									"type": "String",
+									"physicalType": "nvarchar"
+								},
+								"sink": {
+									"name": "NAME",
+									"type": "String",
+									"physicalType": "String"
+								}
+							},
+							{
+								"source": {
+									"name": "agreementStatus",
+									"type": "String",
+									"physicalType": "varchar"
+								},
+								"sink": {
+									"name": "agreementStatus",
+									"type": "String",
+									"physicalType": "String"
+								}
+							},
+							{
+								"source": {
+									"name": "physicalStatus",
+									"type": "String",
+									"physicalType": "varchar"
+								},
+								"sink": {
+									"name": "physicalStatus",
+									"type": "String",
+									"physicalType": "String"
+								}
+							},
+							{
+								"source": {
+									"name": "PURCHID",
+									"type": "String",
+									"physicalType": "nvarchar"
+								},
+								"sink": {
+									"name": "PURCHID",
+									"type": "String",
+									"physicalType": "String"
+								}
+							},
+							{
+								"source": {
+									"name": "poStatus",
+									"type": "String",
+									"physicalType": "varchar"
+								},
+								"sink": {
+									"name": "poStatus",
+									"type": "String",
+									"physicalType": "String"
+								}
+							},
+							{
+								"source": {
+									"name": "Vendor #",
+									"type": "String",
+									"physicalType": "nvarchar"
+								},
+								"sink": {
+									"name": "Vendor #",
+									"type": "String",
+									"physicalType": "String"
+								}
+							},
+							{
+								"source": {
+									"name": "Vendor Name",
+									"type": "String",
+									"physicalType": "nvarchar"
+								},
+								"sink": {
+									"name": "Vendor Name",
+									"type": "String",
+									"physicalType": "String"
+								}
+							},
+							{
+								"source": {
+									"name": "Vendor Ref",
+									"type": "String",
+									"physicalType": "nvarchar"
+								},
+								"sink": {
+									"name": "Vendor Ref",
+									"type": "String",
+									"physicalType": "String"
+								}
+							},
+							{
+								"source": {
+									"name": "TAXGROUP",
+									"type": "String",
+									"physicalType": "nvarchar"
+								},
+								"sink": {
+									"name": "TAXGROUP",
+									"type": "String",
+									"physicalType": "String"
+								}
+							},
+							{
+								"source": {
+									"name": "PURCHUNIT",
+									"type": "String",
+									"physicalType": "nvarchar"
+								},
+								"sink": {
+									"name": "PURCHUNIT",
+									"type": "String",
+									"physicalType": "String"
+								}
+							},
+							{
+								"source": {
+									"name": "PURCHPRICE",
+									"type": "Decimal",
+									"physicalType": "decimal",
+									"scale": 2,
+									"precision": 10
+								},
+								"sink": {
+									"name": "PURCHPRICE",
+									"type": "Decimal",
+									"physicalType": "Decimal"
+								}
+							},
+							{
+								"source": {
+									"name": "LINEDISC",
+									"type": "Decimal",
+									"physicalType": "decimal",
+									"scale": 2,
+									"precision": 10
+								},
+								"sink": {
+									"name": "LINEDISC",
+									"type": "Decimal",
+									"physicalType": "Decimal"
+								}
+							},
+							{
+								"source": {
+									"name": "LINEPERCENT",
+									"type": "Decimal",
+									"physicalType": "decimal",
+									"scale": 2,
+									"precision": 10
+								},
+								"sink": {
+									"name": "LINEPERCENT",
+									"type": "Decimal",
+									"physicalType": "Decimal"
+								}
+							},
+							{
+								"source": {
+									"name": "LINEAMOUNT",
+									"type": "Decimal",
+									"physicalType": "decimal",
+									"scale": 2,
+									"precision": 10
+								},
+								"sink": {
+									"name": "LINEAMOUNT",
+									"type": "Decimal",
+									"physicalType": "Decimal"
+								}
+							},
+							{
+								"source": {
+									"name": "CREATEDDATETIME",
+									"type": "DateTime",
+									"physicalType": "datetime"
+								},
+								"sink": {
+									"name": "CREATEDDATETIME",
+									"type": "DateTime",
+									"physicalType": "DateTime"
+								}
+							},
+							{
+								"source": {
+									"name": "MANUFACTUREDATE",
+									"type": "DateTime",
+									"physicalType": "datetime"
+								},
+								"sink": {
+									"name": "MANUFACTUREDATE",
+									"type": "DateTime",
+									"physicalType": "DateTime"
+								}
+							},
+							{
+								"source": {
+									"name": "ESTIMATEDRECEIPTDATE",
+									"type": "DateTime",
+									"physicalType": "datetime"
+								},
+								"sink": {
+									"name": "ESTIMATEDRECEIPTDATE",
+									"type": "DateTime",
+									"physicalType": "DateTime"
+								}
+							},
+							{
+								"source": {
+									"name": "RECEIVEDDATE",
+									"type": "DateTime",
+									"physicalType": "datetime"
+								},
+								"sink": {
+									"name": "RECEIVEDDATE",
+									"type": "DateTime",
+									"physicalType": "DateTime"
+								}
+							},
+							{
+								"source": {
+									"name": "Orderer",
+									"type": "String",
+									"physicalType": "nvarchar"
+								},
+								"sink": {
+									"name": "Orderer",
+									"type": "String",
+									"physicalType": "String"
+								}
+							},
+							{
+								"source": {
+									"name": "INVENTREFID",
+									"type": "String",
+									"physicalType": "nvarchar"
+								},
+								"sink": {
+									"name": "INVENTREFID",
+									"type": "String",
+									"physicalType": "String"
+								}
+							},
+							{
+								"source": {
+									"name": "accountnum",
+									"type": "String",
+									"physicalType": "nvarchar"
+								},
+								"sink": {
+									"name": "accountnum",
+									"type": "String",
+									"physicalType": "String"
+								}
+							},
+							{
+								"source": {
+									"name": "Cust Name",
+									"type": "String",
+									"physicalType": "nvarchar"
+								},
+								"sink": {
+									"name": "Cust Name",
+									"type": "String",
+									"physicalType": "String"
+								}
+							},
+							{
+								"source": {
+									"name": "Created_Date_Time_Fil",
+									"type": "DateTime",
+									"physicalType": "datetime"
+								},
+								"sink": {
+									"name": "Created_Date_Time_Fil",
+									"type": "DateTime",
+									"physicalType": "DateTime"
+								}
+							}
+						],
+						"typeConversion": true,
+						"typeConversionSettings": {
+							"allowDataTruncation": true,
+							"treatBooleanAsNumber": false
+						}
+					}
+				},
+				"inputs": [
+					{
+						"referenceName": "Briggs_MST",
+						"type": "DatasetReference"
+					}
+				],
+				"outputs": [
+					{
+						"referenceName": "Briggs_MDW",
+						"type": "DatasetReference",
+						"parameters": {
+							"schema_name": "Briggs",
+							"table_name": "Stage_Equipment_PO"
+						}
+					}
+				]
+			},
+			{
+				"name": "Stage Equipment VM does not match Fin Dim",
+				"type": "Copy",
+				"dependsOn": [
+					{
+						"activity": "Stage_Equipment_On_Rent",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"policy": {
+					"timeout": "7.00:00:00",
+					"retry": 0,
+					"retryIntervalInSeconds": 30,
+					"secureOutput": false,
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"source": {
+						"type": "SqlServerSource",
+						"sqlReaderQuery": "with valuemodel_Cte(assetid,DEFAULTDIMENSION,recid,rownum)\nas\n(\n\tselect ASSETID,DEFAULTDIMENSION,recid, row_number()over (partition by assetid order by recid desc) 'rn'\n\tfrom ASSETBOOK\n), valuemodel_old_Cte(assetid,DEFAULTDIMENSION,recid,rownum)\nas\n(\n\tselect ASSETID,DEFAULTDIMENSION,recid, row_number()over (partition by assetid order by recid asc) 'rn'\n\tfrom ASSETBOOK\n)\n\n\nselect\teq.EQUIPMENTID\n\t\n\t\t,ddv2.DISPLAYVALUE 'Eq Branch'\n\t\t,fleet.BATCHTEMPLATEID 'Feet'\n\t\t,ab1.BOOKID 'Old Asset BookId'\n\t\t,ab1.assetgroup 'Old Asset Group'\n\t\t,ddv3.DISPLAYVALUE 'Old VM Branch'\n\t\t,abb1.BOOKID 'New Asset BookId'\n\t\t,abb1.assetgroup 'New Asset Group'\n\t\t,ddv.DISPLAYVALUE 'New VM Branch'\n\t\t,[dbo].ENUM2STR('xap_agreementstatus', eq.agreementstatus) 'Agreement Status'\n\t\t,[dbo].ENUM2STR('xap_physicalstatus', eq.physicalstatus) 'Physical Status',\n\t\tFORMAT (getdate(), 'MM/dd/yyyy hh:mm:ss') Refresh_Date\nfrom XAP_EQUIPMENTTABLE eq\nINNER JOIN DEFAULTDIMENSIONVIEW ddv2 on ddv2.DEFAULTDIMENSION = eq.DEFAULTDIMENSION and ddv2.DIMENSIONATTRIBUTEID = 5637145333\n\t\tINNER JOIN XAP_MACHINEMANUFACTURER eqMake on eq.MACHINEMANUFACTURER = eqMake.RECID\n\t\tINNER JOIN XAP_MACHINETYPE eqModel on eq.MACHINETYPE = eqModel.RECID\nINNER JOIN valuemodel_Cte ab on ab.ASSETID = eq.EQUIPMENTID and ab.rownum = 1\nINNER JOIN DEFAULTDIMENSIONVIEW ddv on ddv.DEFAULTDIMENSION = ab.DEFAULTDIMENSION and ddv.DIMENSIONATTRIBUTEID = 5637145333\nleft join XAP_FLEETBATCHRELATION fleet on fleet.FLEETTYPE = eq.FLEETTYPE and fleet.DATAAREAID = 'BRG'\nleft join assetbook ab1 on ab1.recid = ab.recid\n\nleft JOIN valuemodel_old_Cte abb on abb.ASSETID = eq.EQUIPMENTID and abb.rownum = 1\nleft join assetbook abb1 on abb1.recid = abb.recid\nINNER JOIN DEFAULTDIMENSIONVIEW ddv3 on ddv3.DEFAULTDIMENSION = abb.DEFAULTDIMENSION and ddv3.DIMENSIONATTRIBUTEID = 5637145333\nwhere  ddv.DISPLAYVALUE <> ddv2.DISPLAYVALUE\nand fleet.BATCHTEMPLATEID  <> 'Customer'",
+						"queryTimeout": "02:00:00",
+						"partitionOption": "None"
+					},
+					"sink": {
+						"type": "AzureSqlSink",
+						"preCopyScript": "Truncate table briggs.Stage_Equipment_VM",
+						"disableMetricsCollection": false
+					},
+					"enableStaging": false,
+					"translator": {
+						"type": "TabularTranslator",
+						"mappings": [
+							{
+								"source": {
+									"name": "EQUIPMENTID",
+									"type": "String",
+									"physicalType": "nvarchar"
+								},
+								"sink": {
+									"name": "EQUIPMENTID",
+									"type": "String",
+									"physicalType": "nvarchar"
+								}
+							},
+							{
+								"source": {
+									"name": "Eq Branch",
+									"type": "String",
+									"physicalType": "nvarchar"
+								},
+								"sink": {
+									"name": "Eq Branch",
+									"type": "String",
+									"physicalType": "nvarchar"
+								}
+							},
+							{
+								"source": {
+									"name": "Feet",
+									"type": "String",
+									"physicalType": "nvarchar"
+								},
+								"sink": {
+									"name": "Feet",
+									"type": "String",
+									"physicalType": "nvarchar"
+								}
+							},
+							{
+								"source": {
+									"name": "Old Asset BookId",
+									"type": "String",
+									"physicalType": "nvarchar"
+								},
+								"sink": {
+									"name": "Old Asset BookId",
+									"type": "String",
+									"physicalType": "nvarchar"
+								}
+							},
+							{
+								"source": {
+									"name": "Old Asset Group",
+									"type": "String",
+									"physicalType": "nvarchar"
+								},
+								"sink": {
+									"name": "Old Asset Group",
+									"type": "String",
+									"physicalType": "nvarchar"
+								}
+							},
+							{
+								"source": {
+									"name": "Old VM Branch",
+									"type": "String",
+									"physicalType": "nvarchar"
+								},
+								"sink": {
+									"name": "Old VM Branch",
+									"type": "String",
+									"physicalType": "nvarchar"
+								}
+							},
+							{
+								"source": {
+									"name": "New Asset BookId",
+									"type": "String",
+									"physicalType": "nvarchar"
+								},
+								"sink": {
+									"name": "New Asset BookId",
+									"type": "String",
+									"physicalType": "nvarchar"
+								}
+							},
+							{
+								"source": {
+									"name": "New Asset Group",
+									"type": "String",
+									"physicalType": "nvarchar"
+								},
+								"sink": {
+									"name": "New Asset Group",
+									"type": "String",
+									"physicalType": "nvarchar"
+								}
+							},
+							{
+								"source": {
+									"name": "New VM Branch",
+									"type": "String",
+									"physicalType": "nvarchar"
+								},
+								"sink": {
+									"name": "New VM Branch",
+									"type": "String",
+									"physicalType": "nvarchar"
+								}
+							},
+							{
+								"source": {
+									"name": "Agreement Status",
+									"type": "String",
+									"physicalType": "varchar"
+								},
+								"sink": {
+									"name": "Agreement Status",
+									"type": "String",
+									"physicalType": "varchar"
+								}
+							},
+							{
+								"source": {
+									"name": "Physical Status",
+									"type": "String",
+									"physicalType": "varchar"
+								},
+								"sink": {
+									"name": "Physical Status",
+									"type": "String",
+									"physicalType": "varchar"
+								}
+							},
+							{
+								"source": {
+									"name": "Refresh_Date",
+									"type": "String",
+									"physicalType": "nvarchar"
+								},
+								"sink": {
+									"name": "Refresh_Date",
+									"type": "String",
+									"physicalType": "nvarchar"
+								}
+							}
+						],
+						"typeConversion": true,
+						"typeConversionSettings": {
+							"allowDataTruncation": true,
+							"treatBooleanAsNumber": false
+						}
+					}
+				},
+				"inputs": [
+					{
+						"referenceName": "Briggs_MST",
+						"type": "DatasetReference"
+					}
+				],
+				"outputs": [
+					{
+						"referenceName": "Briggs_MDW",
+						"type": "DatasetReference",
+						"parameters": {
+							"schema_name": "Briggs",
+							"table_name": "Stage_Equipment_VM"
+						}
+					}
+				]
+			},
+			{
+				"name": "Stage_Equipment_Invoice_Search",
+				"type": "Copy",
+				"dependsOn": [],
+				"policy": {
+					"timeout": "7.00:00:00",
+					"retry": 0,
+					"retryIntervalInSeconds": 30,
+					"secureOutput": false,
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"source": {
+						"type": "SqlServerSource",
+						"sqlReaderQuery": "Declare @cte table (\n\tunit_num varchar(30),\n\tprice real,\n\tacct varchar(20),\n\tinvoiceid varchar(20))\n\n;Declare @contact table (\n\tcustnumber varchar(20)\n\t,fullname varchar(100)\n\t,phone varchar(100)\n\t,email varchar(100))\n\n\ninsert into @cte\n\tselect finEq.DISPLAYVALUE,sum(a.TRANSACTIONCURRENCYAMOUNT),finAcct.DISPLAYVALUE,b.DOCUMENTNUMBER\n\tfrom GENERALJOURNALACCOUNTENTRY a \n\tinner join GENERALJOURNALENTRY b on a.GENERALJOURNALENTRY = b.RECID \n\tinner join DIMENSIONATTRIBUTELEVELVALUEVIEW finEq \n\t\t\ton\tfinEq.VALUECOMBINATIONRECID = a.LEDGERDIMENSION \n\t\t\tand finEq.DIMENSIONATTRIBUTE = 5637145329\n\tinner join DIMENSIONATTRIBUTELEVELVALUEVIEW finAcct \n\t\t\ton finAcct.VALUECOMBINATIONRECID = a.LEDGERDIMENSION \n\t\t\tand finAcct.DIMENSIONATTRIBUTE = 5637144583 \n\t\t\tand finAcct.DISPLAYVALUE in ('400100','400110','400120','400130','400131','500100','500110','500120','500125','500126')\n\n\tgroup by finEq.DISPLAYVALUE,finAcct.DISPLAYVALUE,b.DOCUMENTNUMBER\n\t\n\t\n\t\n\n;insert into @contact\n\tselect\n\tsc.CUSTACCOUNT\n\t,case when sc.AUTHORIZERNAME = '' then sc.CONTACTPERSONNAME\n\t\telse sc.AUTHORIZERNAME end as 'Authorizer Contact'\n\t,sc.AUTHORIZERPHONE\n\t,sc.AUTHORIZEREMAIL\n\tfrom XAP_SVCCALLTABLE sc\n\tinner join \n\t(select\n\tsct.CUSTACCOUNT 'acct'\n\t,max(sct.CREATEDDATETIME) 'max_date'\n\tfrom XAP_SVCCALLTABLE sct\n\tleft join XAP_SVCCALLTYPETABLE sctype on sctype.RECID = sct.CALLTYPEID\n\twhere sct.AUTHORIZER <> '' OR sct.AUTHORIZERNAME <> ''\n\tand sctype.CALLTYPEID in ('Fleet','GM','PM','Quote / Dispatch', 'Quote / CCR', 'Regular', 'Tires', 'Warranty')\n\t--and sct.CUSTACCOUNT = 'C2032883'\n\tgroup by sct.CUSTACCOUNT\n\t) a on a.acct = sc.CUSTACCOUNT and a.max_date = sc.CREATEDDATETIME\n\n\n\n;with SalesPeople_CTE (name,branch,[type],[plan],recid,WorkerId,territory,salesplan)\nas\n(\n\tSELECT \n\t\tdir.name,\n\t\tcsp.PARS as 'branch',\n\t\tcspt.description 'Type', \n\t\tcase \n\t\t\twhen \tcspt.SALESPERSONTYPE in (7,8,9) then 'A'\n\t\t\twhen \tcspt.SALESPERSONTYPE in (1,2,3) then 'B'\n\t\t\telse 'C'\n\t\tend as 'plan',\n\t\tcsp.RECID,\n\t\twrker.PERSONNELNUMBER,\n\t\tcsp.SALESMANCODE,\n\t\tcspt.SALESPERSONTYPE\n\t\t\n\tFROM  XAP_CRMSALESPERSON csp\n\t\tINNER JOIN XAP_CRMSALESPERSONTYPE cspt on csp.SALESPERSONTYPE = cspt.RECID and cspt.dataareaid = 'brg' and cspt.partition = 5637144576\n\t\tINNER JOIN HCMWORKER wrker on csp.WORKER = wrker.RECID\n\t\tINNER JOIN DIRPARTYTABLE dir on wrker.PERSON = dir.RECID\n\t\twhere  csp.dataareaid = 'brg' and csp.partition = 5637144576\n)\n\nselect isnull(salesperson.name,'*NO SALESPERSON*') 'SalesPerson1' ,\n\tsalesperson.branch,\n\tsalesperson.[type],\n\tsalesperson.[plan],\n\tsalesperson.WorkerId,\n\tsalesperson.territory,\n\tsalesperson.salesplan,\n--/SalesPerson\n\tcit.ORIGSALESID,\n\tcij.INVOICEID,\n\tinvBranch.DISPLAYVALUE 'InvoiceBranch',\n\tcij.ORDERACCOUNT,\n\tdirOrder.NAME 'OrderCustName',\n\tcij.INVOICEACCOUNT,\n\tdirInvoice.NAME 'InvCustName',\n\toc.ORDERCLASSID,\n\tcit.LINENUM,\n\t--cit.qty,\n\teq.EQUIPMENTID,\n\tinvdim.INVENTBATCHID,\n\tcast(isnull(eqPrice.price,0)*-1 as decimal(20,2)) 'SalePrice',\n\tcast(isnull(eqCost.price,0)as decimal(20,2)) 'AcqPrice',\n\tcast((isnull(eqPrice.price,0) *-1) - isnull(eqCost.price,0)as decimal(20,2)) 'GP',\n\teq.INVENTSERIALID 'serial',\n\teqMake.MANUFACTURERID 'make',\n\teqType.TYPEID 'model',\n\teq.ITEMID,\n\teq.orderdate,\n\tcit.INVOICEDATE\n\t,cast(eqFin.ADDITIONALCOST as decimal(10,2)) 'estPurchPrice'\n\t,cast(eqFin.NEWPRICE  as decimal(10,2)) 'estNewPrice'\n\t,cast((eqFin.NEWPRICE - eqFin.ADDITIONALCOST) as decimal(10,2)) 'estGP'\n\t,eqTech.MACHINEMANUFACTUREYEAR\n\t,replace(replace(lpa.STREET,char(10),''),char(13),'') 'Street'\n\t,lpa.CITY\n\t,lpa.STATE\n\t,lpa.ZIPCODE\n\t,case when crmterr.ZipCode is null then 'Out of Territory' else 'In Territory' end as 'Footprint Status'\n\t,tbl_con.fullname 'Svc Authorizer-Contact'\n\t,tbl_con.phone 'Auth Phone'\n\t,tbl_con.email 'Auth E-mail' \nFROM CUSTINVOICETRANS cit\n\tINNER JOIN  CUSTINVOICEJOUR cij on cit.INVOICEID = cij.INVOICEID\n\tINNER JOIN XAP_ORDERCLASS oc on cij.ORDERCLASS = oc.RECID\n\tLEFT JOIN SalesPeople_CTE salesperson on cij.SALESPERSON1 = salesperson.RECID\n\tLEFT JOIN XAP_INVOICESCHEDULELINE isl  on isl.RECID =cit.INVOICESCHEDULELINE\n\tLEFT JOIN XAP_EQUIPMENTTABLE eq on cit.EQUIPMENT = eq.RECID\n\t\tLEFT JOIN XAP_MACHINETYPE eqType on  eq.MACHINETYPE = eqType.RECID\n\t\tLEFT JOIN XAP_MACHINEMANUFACTURER eqMake on eqType.MACHINEMANUFACTURER = eqMake.RECID\n\t\tLEFT join XAP_FLEETBATCHRELATION fleettype on fleettype.FLEETTYPE = eq.FLEETTYPE and fleettype.DATAAREAID = cit.DATAAREAID\n\tLEFT JOIN XAP_RENREVENUECATEGORYTABLE renrev on cit.SALESCATEGORY = renrev.SALESCATEGORY\n\tLEFT JOIN @cte eqCost on eqCost.unit_num = eq.EQUIPMENTID and eqCost.invoiceid = cit.INVOICEID and eqCost.acct like '5%'\n\tLEFT JOIN inventdim invdim on invdim.INVENTDIMID = cit.INVENTDIMID\n\tLEFT JOIN @cte eqPrice on eqPrice.unit_num = eq.EQUIPMENTID and eqPrice.invoiceid = cit.INVOICEID and eqPrice.acct like '4%'\n\tLEFT JOIN SALESTABLE salesTable on cij.SALESID = salesTable.SALESID\n\tLEFT JOIN DEFAULTDIMENSIONVIEW invBranch on invBranch.DEFAULTDIMENSION = salesTable.DEFAULTDIMENSION and invBranch.DIMENSIONATTRIBUTEID = 5637145333\n\tLEFT JOIN custtable cusOrder on cij.ORDERACCOUNT = cusOrder.accountnum\n\tLEFT JOIN custtable cusInvoice on cij.INVOICEACCOUNT = cusInvoice.accountnum\n\tLEFT JOIN DIRPARTYTABLE dirOrder on cusOrder.PARTY = dirOrder.RECID\n\tLEFT JOIN DIRPARTYTABLE dirInvoice on cusInvoice.PARTY = dirInvoice.RECID\n\tLEFT join XAP_EQUIPMENTFINANCETABLE eqFin on eqFin.EQUIPMENT = eq.RECID\n\tleft join XAP_EQUIPMENTTECHNICALINFO eqTech on eqTech.EQUIPMENT = eq.RECID\n\tleft join LOGISTICSPOSTALADDRESS lpa on cit.DELIVERYPOSTALADDRESS = lpa.RECID\n\tLEFT JOIN\n\t\t(select distinct\n\t\t\ttar.ZipCode\n\t\t\tfrom BriggsAX.dbo.CRM_TerritoryAssignmentRules tar\n\t\t\twhere tar.crmstatus = 0) crmterr on crmterr.ZipCode = left(lpa.ZipCode,5)\n\tLEFT JOIN @contact tbl_con on tbl_con.custnumber = cij.ORDERACCOUNT\n\twhere oc.ORDERCLASSID = 'EQUIPMENT' \n\tand eq.EQUIPMENTID is not null",
+						"queryTimeout": "02:00:00",
+						"partitionOption": "None"
+					},
+					"sink": {
+						"type": "AzureSqlSink",
+						"preCopyScript": "truncate table briggs.Stage_Equipment_Invoice_Search",
+						"disableMetricsCollection": false
+					},
+					"enableStaging": false,
+					"translator": {
+						"type": "TabularTranslator",
+						"mappings": [
+							{
+								"source": {
+									"name": "SalesPerson1",
+									"type": "String",
+									"physicalType": "nvarchar"
+								},
+								"sink": {
+									"name": "SalesPerson1",
+									"type": "String",
+									"physicalType": "String"
+								}
+							},
+							{
+								"source": {
+									"name": "branch",
+									"type": "Int32",
+									"physicalType": "int"
+								},
+								"sink": {
+									"name": "branch",
+									"type": "Int32",
+									"physicalType": "Int32"
+								}
+							},
+							{
+								"source": {
+									"name": "type",
+									"type": "String",
+									"physicalType": "nvarchar"
+								},
+								"sink": {
+									"name": "type",
+									"type": "String",
+									"physicalType": "String"
+								}
+							},
+							{
+								"source": {
+									"name": "plan",
+									"type": "String",
+									"physicalType": "varchar"
+								},
+								"sink": {
+									"name": "plan",
+									"type": "String",
+									"physicalType": "String"
+								}
+							},
+							{
+								"source": {
+									"name": "WorkerId",
+									"type": "String",
+									"physicalType": "nvarchar"
+								},
+								"sink": {
+									"name": "WorkerId",
+									"type": "String",
+									"physicalType": "String"
+								}
+							},
+							{
+								"source": {
+									"name": "territory",
+									"type": "String",
+									"physicalType": "nvarchar"
+								},
+								"sink": {
+									"name": "territory",
+									"type": "String",
+									"physicalType": "String"
+								}
+							},
+							{
+								"source": {
+									"name": "salesplan",
+									"type": "String",
+									"physicalType": "nvarchar"
+								},
+								"sink": {
+									"name": "salesplan",
+									"type": "String",
+									"physicalType": "String"
+								}
+							},
+							{
+								"source": {
+									"name": "ORIGSALESID",
+									"type": "String",
+									"physicalType": "nvarchar"
+								},
+								"sink": {
+									"name": "ORIGSALESID",
+									"type": "String",
+									"physicalType": "String"
+								}
+							},
+							{
+								"source": {
+									"name": "INVOICEID",
+									"type": "String",
+									"physicalType": "nvarchar"
+								},
+								"sink": {
+									"name": "INVOICEID",
+									"type": "String",
+									"physicalType": "String"
+								}
+							},
+							{
+								"source": {
+									"name": "InvoiceBranch",
+									"type": "String",
+									"physicalType": "nvarchar"
+								},
+								"sink": {
+									"name": "InvoiceBranch",
+									"type": "String",
+									"physicalType": "String"
+								}
+							},
+							{
+								"source": {
+									"name": "ORDERACCOUNT",
+									"type": "String",
+									"physicalType": "nvarchar"
+								},
+								"sink": {
+									"name": "ORDERACCOUNT",
+									"type": "String",
+									"physicalType": "String"
+								}
+							},
+							{
+								"source": {
+									"name": "OrderCustName",
+									"type": "String",
+									"physicalType": "nvarchar"
+								},
+								"sink": {
+									"name": "OrderCustName",
+									"type": "String",
+									"physicalType": "String"
+								}
+							},
+							{
+								"source": {
+									"name": "INVOICEACCOUNT",
+									"type": "String",
+									"physicalType": "nvarchar"
+								},
+								"sink": {
+									"name": "INVOICEACCOUNT",
+									"type": "String",
+									"physicalType": "String"
+								}
+							},
+							{
+								"source": {
+									"name": "InvCustName",
+									"type": "String",
+									"physicalType": "nvarchar"
+								},
+								"sink": {
+									"name": "InvCustName",
+									"type": "String",
+									"physicalType": "String"
+								}
+							},
+							{
+								"source": {
+									"name": "ORDERCLASSID",
+									"type": "String",
+									"physicalType": "nvarchar"
+								},
+								"sink": {
+									"name": "ORDERCLASSID",
+									"type": "String",
+									"physicalType": "String"
+								}
+							},
+							{
+								"source": {
+									"name": "LINENUM",
+									"type": "Decimal",
+									"physicalType": "decimal",
+									"scale": 16,
+									"precision": 32
+								},
+								"sink": {
+									"name": "LINENUM",
+									"type": "Decimal",
+									"physicalType": "Decimal"
+								}
+							},
+							{
+								"source": {
+									"name": "EQUIPMENTID",
+									"type": "String",
+									"physicalType": "nvarchar"
+								},
+								"sink": {
+									"name": "EQUIPMENTID",
+									"type": "String",
+									"physicalType": "String"
+								}
+							},
+							{
+								"source": {
+									"name": "INVENTBATCHID",
+									"type": "String",
+									"physicalType": "nvarchar"
+								},
+								"sink": {
+									"name": "INVENTBATCHID",
+									"type": "String",
+									"physicalType": "String"
+								}
+							},
+							{
+								"source": {
+									"name": "SalePrice",
+									"type": "Decimal",
+									"physicalType": "decimal",
+									"scale": 2,
+									"precision": 20
+								},
+								"sink": {
+									"name": "SalePrice",
+									"type": "Decimal",
+									"physicalType": "Decimal"
+								}
+							},
+							{
+								"source": {
+									"name": "AcqPrice",
+									"type": "Decimal",
+									"physicalType": "decimal",
+									"scale": 2,
+									"precision": 20
+								},
+								"sink": {
+									"name": "AcqPrice",
+									"type": "Decimal",
+									"physicalType": "Decimal"
+								}
+							},
+							{
+								"source": {
+									"name": "GP",
+									"type": "Decimal",
+									"physicalType": "decimal",
+									"scale": 2,
+									"precision": 20
+								},
+								"sink": {
+									"name": "GP",
+									"type": "Decimal",
+									"physicalType": "Decimal"
+								}
+							},
+							{
+								"source": {
+									"name": "serial",
+									"type": "String",
+									"physicalType": "nvarchar"
+								},
+								"sink": {
+									"name": "serial",
+									"type": "String",
+									"physicalType": "String"
+								}
+							},
+							{
+								"source": {
+									"name": "make",
+									"type": "String",
+									"physicalType": "nvarchar"
+								},
+								"sink": {
+									"name": "make",
+									"type": "String",
+									"physicalType": "String"
+								}
+							},
+							{
+								"source": {
+									"name": "model",
+									"type": "String",
+									"physicalType": "nvarchar"
+								},
+								"sink": {
+									"name": "model",
+									"type": "String",
+									"physicalType": "String"
+								}
+							},
+							{
+								"source": {
+									"name": "ITEMID",
+									"type": "String",
+									"physicalType": "nvarchar"
+								},
+								"sink": {
+									"name": "ITEMID",
+									"type": "String",
+									"physicalType": "String"
+								}
+							},
+							{
+								"source": {
+									"name": "orderdate",
+									"type": "DateTime",
+									"physicalType": "datetime"
+								},
+								"sink": {
+									"name": "orderdate",
+									"type": "DateTime",
+									"physicalType": "DateTime"
+								}
+							},
+							{
+								"source": {
+									"name": "INVOICEDATE",
+									"type": "DateTime",
+									"physicalType": "datetime"
+								},
+								"sink": {
+									"name": "INVOICEDATE",
+									"type": "DateTime",
+									"physicalType": "DateTime"
+								}
+							},
+							{
+								"source": {
+									"name": "estPurchPrice",
+									"type": "Decimal",
+									"physicalType": "decimal",
+									"scale": 2,
+									"precision": 10
+								},
+								"sink": {
+									"name": "estPurchPrice",
+									"type": "Decimal",
+									"physicalType": "Decimal"
+								}
+							},
+							{
+								"source": {
+									"name": "estNewPrice",
+									"type": "Decimal",
+									"physicalType": "decimal",
+									"scale": 2,
+									"precision": 10
+								},
+								"sink": {
+									"name": "estNewPrice",
+									"type": "Decimal",
+									"physicalType": "Decimal"
+								}
+							},
+							{
+								"source": {
+									"name": "estGP",
+									"type": "Decimal",
+									"physicalType": "decimal",
+									"scale": 2,
+									"precision": 10
+								},
+								"sink": {
+									"name": "estGP",
+									"type": "Decimal",
+									"physicalType": "Decimal"
+								}
+							},
+							{
+								"source": {
+									"name": "MACHINEMANUFACTUREYEAR",
+									"type": "Int32",
+									"physicalType": "int"
+								},
+								"sink": {
+									"name": "MACHINEMANUFACTUREYEAR",
+									"type": "Int32",
+									"physicalType": "Int32"
+								}
+							},
+							{
+								"source": {
+									"name": "Street",
+									"type": "String",
+									"physicalType": "nvarchar"
+								},
+								"sink": {
+									"name": "Street",
+									"type": "String",
+									"physicalType": "String"
+								}
+							},
+							{
+								"source": {
+									"name": "CITY",
+									"type": "String",
+									"physicalType": "nvarchar"
+								},
+								"sink": {
+									"name": "CITY",
+									"type": "String",
+									"physicalType": "String"
+								}
+							},
+							{
+								"source": {
+									"name": "STATE",
+									"type": "String",
+									"physicalType": "nvarchar"
+								},
+								"sink": {
+									"name": "STATE",
+									"type": "String",
+									"physicalType": "String"
+								}
+							},
+							{
+								"source": {
+									"name": "ZIPCODE",
+									"type": "String",
+									"physicalType": "nvarchar"
+								},
+								"sink": {
+									"name": "ZIPCODE",
+									"type": "String",
+									"physicalType": "String"
+								}
+							},
+							{
+								"source": {
+									"name": "Footprint Status",
+									"type": "String",
+									"physicalType": "varchar"
+								},
+								"sink": {
+									"name": "Footprint Status",
+									"type": "String",
+									"physicalType": "String"
+								}
+							},
+							{
+								"source": {
+									"name": "Svc Authorizer-Contact",
+									"type": "String",
+									"physicalType": "varchar"
+								},
+								"sink": {
+									"name": "Svc Authorizer-Contact",
+									"type": "String",
+									"physicalType": "String"
+								}
+							},
+							{
+								"source": {
+									"name": "Auth Phone",
+									"type": "String",
+									"physicalType": "varchar"
+								},
+								"sink": {
+									"name": "Auth Phone",
+									"type": "String",
+									"physicalType": "String"
+								}
+							},
+							{
+								"source": {
+									"name": "Auth E-mail",
+									"type": "String",
+									"physicalType": "varchar"
+								},
+								"sink": {
+									"name": "Auth E-mail",
+									"type": "String",
+									"physicalType": "String"
+								}
+							}
+						],
+						"typeConversion": true,
+						"typeConversionSettings": {
+							"allowDataTruncation": true,
+							"treatBooleanAsNumber": false
+						}
+					}
+				},
+				"inputs": [
+					{
+						"referenceName": "Briggs_MST",
+						"type": "DatasetReference"
+					}
+				],
+				"outputs": [
+					{
+						"referenceName": "Briggs_MDW",
+						"type": "DatasetReference",
+						"parameters": {
+							"schema_name": "Briggs",
+							"table_name": "Stage_Equipment_Invoice_Search"
+						}
+					}
+				]
+			},
+			{
+				"name": "Stage_Equipment_Pipeline_Backlog",
+				"type": "Copy",
+				"dependsOn": [
+					{
+						"activity": "Stage_Equipment GP Split",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"policy": {
+					"timeout": "7.00:00:00",
+					"retry": 0,
+					"retryIntervalInSeconds": 30,
+					"secureOutput": false,
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"source": {
+						"type": "SqlServerSource",
+						"sqlReaderQuery": "\nwith SalesPeople_CTE (name,branch,[type],[plan],recid,WorkerId,territory,salesplan)\nas\n(\n\tSELECT \n\t\tdir.name,\n\t\tcsp.PARS as 'branch',\n\t\tcspt.description 'Type', \n\t\tcase \n\t\t\twhen \tcspt.SALESPERSONTYPE in (7,8,9) then 'A'\n\t\t\twhen \tcspt.SALESPERSONTYPE in (1,2,3) then 'B'\n\t\t\telse 'C'\n\t\tend as 'plan',\n\t\tcsp.RECID,\n\t\twrker.PERSONNELNUMBER,\n\t\tcsp.SALESMANCODE,\n\t\tcspt.SALESPERSONTYPE\n\t\t\n\tFROM  XAP_CRMSALESPERSON csp\n\t\tINNER JOIN XAP_CRMSALESPERSONTYPE cspt on csp.SALESPERSONTYPE = cspt.RECID\n\t\tINNER JOIN HCMWORKER wrker on csp.WORKER = wrker.RECID\n\t\tINNER JOIN DIRPARTYTABLE dir on wrker.PERSON = dir.RECID\n),svcCte(svcid,eqid)\nas(\n\tselect  min(svcTbl.SVCCALLID)\n\t\t\t,svcTbl.EQUIPMENTID\n\tfrom XAP_SVCCALLTABLE svcTbl\n\tinner join XAP_SVCCALLTYPETABLE svcType on svcTbl.CALLTYPEID = svcType.RECID\n\twhere svcType.CALLTYPEID in ('MAKEREADY','DIRECTSHIP','SHIP OUT')\n\tand svcTbl.EQUIPMENTID <> 0\n\tand svcTbl.CALLOPENSTATUS = 1\n\tgroup by svcTbl.EQUIPMENTID\n),labor_cte\nas(\n\tselect svcCAll.PROJID\n\t,min(pjt.TRANSDATE)'mindate'\n\t,max(pjt.TRANSDATE)'maxdate'\n\tfrom ProjJournalTrans pjt\n\tinner join XAP_SVCSEGMENTTABLE svcSeg on svcSeg.PROJID = pjt.PROJID\n\tinner join XAP_SVCCALLTABLE svcCall on svcCall.RECID = svcSeg.SVCCALLID\n\tleft join projjournaltable pj on pj.JOURNALID = pjt.JOURNALID\n\twhere pj.POSTED = 1\n\tgroup by svcCAll.PROJID\n),last_status as (\n\tselect SVCCALLID 'SvcRecId',max(recid) 'HistRecid'\n\tfrom XAP_SVCCALLHISTORY a\n\twhere a.CHANGETYPE = 2\n\tgroup by SVCCALLID\n)\n\nselect \n\t\tddv.DISPLAYVALUE 'Branch'\n\t\t,st.SALESID\n\t\t,ct.ACCOUNTNUM\n\t\t,dir.NAME\n\t\t,eq.equipmentid Equipment_id\n\t\t,eq.INVENTSERIALID\n,make.MANUFACTURERID\n\t\t,make.MANUFACTURERID 'Make'\n\t\t,model.TYPEID 'Model'\n\t\t,eq.ITEMID\n\t\t,isnull(invdim.INVENTBATCHID,fleettype.BATCHTEMPLATEID) 'Fleet'\n\t\t,fleettype.BATCHTEMPLATEID 'Fleet2'\n\t\t,case when eq.ORDERDATE = '1900-01-01 00:00:00.000' then ''\n\t\t\t else eq.ORDERDATE\n\t\tend 'ORDERDATE'\n\t\t,case when eq.ESTIMATEDRECEIPTDATE = '1900-01-01 00:00:00.000' then ''\n\t\t\t else eq.ESTIMATEDRECEIPTDATE\n\t\tend 'ESTIMATEDRECEIPTDATE'\n\t\t,case when eq.RECEIVEDDATE = '1900-01-01 00:00:00.000' then ''\n\t\t\t else eq.RECEIVEDDATE\n\t\tend 'RECEIVEDDATE'\n\t\t,case when eq.DELIVERYDATE = '1900-01-01 00:00:00.000' then ''\n\t\t\t else eq.DELIVERYDATE\n\t\tend 'DELIVERYDATE'\n\t\t,case\n\t\t\twhen eq.deliverydate <> '1900-01-01 00:00:00.000' then eq.deliverydate\n\t\t\twhen eq.RECEIVEDDATE <> '1900-01-01 00:00:00.000' then case when ddv.DISPLAYVALUE = '106' then dateadd(day,28,eq.RECEIVEDDATE)  else dateadd(day,14,eq.RECEIVEDDATE) end\n\t\t\telse  case when ddv.DISPLAYVALUE = '106' then dateadd(day,28,eq.ESTIMATEDRECEIPTDATE) else dateadd(day,14,eq.ESTIMATEDRECEIPTDATE) end\n\t\t End 'Est_Invoicedate'\n\t\t ,\n\t\t case\n\t\t\twhen eq.deliverydate <> '1900-01-01 00:00:00.000' then eq.deliverydate\n\t\t\twhen eq.RECEIVEDDATE <> '1900-01-01 00:00:00.000' then dateadd(day,14,eq.RECEIVEDDATE)\n\t\t\telse dateadd(day,14,eq.ESTIMATEDRECEIPTDATE)\n\t\t End 'Est_Invoicedate_Salesperson'\n\t\t ,st.ShippingDateRequested 'Est_Invoicedate_GJ'\n\t\t ,sp1.name 'Sales_Person1'\n\t\t ,isnull(sp2.name,'') 'Sales_Person2'\n\t\t,cast(eqFin.ADDITIONALCOST as decimal(10,2)) 'PurchPrice'\n\t\t,cast(eqFin.NEWPRICE  as decimal(10,2)) 'NewPrice'\n\t\t,cast((eqFin.NEWPRICE - eqFin.ADDITIONALCOST) as decimal(10,2)) 'GP'\n\t\t,cast(isnull(comRates.Commission,0) as varchar) + '%-' + isnull(comRates.[type],'NONE') 'Commission_%'\n\t\t,cast(isnull(case \n\t\t\twhen comRates.[type] = 'GP' then (comRates.Commission/100) * (isnull(eqFin.NEWPRICE,0) - isnull(eqFin.ADDITIONALCOST ,0))\n\t\t\twhen comRates.[type] = 'SP' then (comRates.Commission/100) * (eqFin.NEWPRICE )\n\t\tend ,0)  as decimal(10,2)) 'Commission_Payment'\n\t\t,svcCte.svcid\n\t\t,sct.CALLSTATUSID\n\t\t,callType.CALLTYPEID\n\t\t,left(eqTrade.CATUSEDEQNOTE,50) 'Note'\n\t\t,lpa.ZIPCODE 'zip'\n\t\t,replace(replace(lpa.ADDRESS,char(10),' '),char(13),' ') 'ADDRESS'\n\t\t,eqTech.EXTERNALREFERENCE\n\t\t,month(case when eq.ORDERDATE = '1900-01-01 00:00:00.000' then ''\n\t\t\t else eq.ORDERDATE\n\t\tend) 'BookingMonth'\n\t\t,Year(case when eq.ORDERDATE = '1900-01-01 00:00:00.000' then ''\n\t\t\t else eq.ORDERDATE\n\t\tend) 'BookingYear'\n\t\t,DATEPART(QUARTER,(case when eq.ORDERDATE = '1900-01-01 00:00:00.000' then ''\n\t\t\t else eq.ORDERDATE\n\t\tend)) 'BookingQuarter'\n\t\t,ll.mindate\n\t\t,ll.maxdate\n\t\t,makereadyClose.maxCloseDate\n\t\t,st.createddatetime\n\t\t,svcHist.CREATEDDATETIME 'Last Status Change'\n\t\t,dirBt.Name 'InvoiceName'\n\t\t,bt.accountnum 'InvoiceNum',eq.fleettype,oc.ORDERCLASSID,st.SALESSTATUS,st.DATAAREAID , st.PARTITION,\n\t\tct.custgroup\n\t\t\nfrom SALESTABLE st\n\t\tinner join SALESLINE sl on st.SALESID = sl.SALESID --and sl.DATAAREAID = 'BRG' and sl.PARTITION = 5637144576\n\t\tinner join XAP_EQUIPMENTTABLE eq on sl.EQUIPMENTID = eq.EQUIPMENTID --and eq.DATAAREAID = 'BRG' and eq.PARTITION = 5637144576\n\t\tLEFT join XAP_EQUIPMENTFINANCETABLE eqFin on eqFin.EQUIPMENT = eq.RECID --and eqFin.DATAAREAID = 'BRG' and eqFin.PARTITION = 5637144576\n\t\tinner join XAP_FLEETBATCHRELATION fleettype on fleettype.FLEETTYPE = eq.FLEETTYPE and fleettype.DATAAREAID = 'BRG'\n\t\tLEFT join XAP_ORDERCLASS oc on oc.RECID = st.ORDERCLASSRECID --and oc.DATAAREAID = 'BRG' and oc.PARTITION = 5637144576\n\t\tleft join XAP_EQUIPMENTTRADEINFO eqTrade on eqTrade.EQUIPMENT = eq.RECID --and eqTrade.DATAAREAID = 'BRG' and eqTrade.PARTITION = 5637144576\n\t\tleft join XAP_EQUIPMENTTECHNICALINFO eqTech on eqTech.EQUIPMENT = eq.RECID --and eqTech.DATAAREAID = 'BRG' and eqTech.PARTITION = 5637144576\n\t\tLEFT join DEFAULTDIMENSIONVIEW ddv on st.DEFAULTDIMENSION = ddv.DEFAULTDIMENSION and ddv.DIMENSIONATTRIBUTEID =5637145333\n\t\tLEFT join XAP_MACHINEMANUFACTURER make on make.RECID = eq.MACHINEMANUFACTURER --and make.DATAAREAID = 'BRG' and make.PARTITION = 5637144576\n\t\tLEFT join XAP_MACHINETYPE model on model.RECID = eq.MACHINETYPE --and model.DATAAREAID = 'BRG' and model.PARTITION = 5637144576\n\t\tLEFT join SalesPeople_CTE sp1 on sp1.recid = st.SALESPERSON1\n\t\tLEFT join SalesPeople_CTE sp2 on sp2.recid = st.SALESPERSON2\n\t\tLEFT join CUSTTABLE ct on ct.accountnum = st.CUSTACCOUNT --and ct.DATAAREAID = 'BRG' and ct.PARTITION = 5637144576\n\t\tLEFT join CUSTTABLE bt on bt.accountnum = st.INVOICEACCOUNT and bt.DATAAREAID = 'BRG' and bt.PARTITION = 5637144576\n\t\tLEFT join DIRPARTYTABLE dir on dir.RECID = ct.PARTY \n\t\tLEFT join DIRPARTYTABLE dirBt on dirBt.RECID = bt.PARTY \n\t\tLEFT JOIN rrcommissionrates comRates on comRates.item_number = eq.ITEMID \n\t\t\t\t\t\t\t\t\t\t\tand comRates.fleet_type = fleettype.BATCHTEMPLATEID \n\t\t\t\t\t\t\t\t\t\t\tand comRates.orderclass = oc.ORDERCLASSID \n\t\t\t\t\t\t\t\t\t\t\tand comRates.[plan] = sp1.[plan]\n\t\tleft join svcCte svcCte on svcCte.eqid = eq.RECID\n\t\tleft join XAP_SVCCALLTABLE svcT on svcT.SVCCALLID = svcCte.svcid\n\t\tleft join XAP_SVCCALLTYPELINE sct on sct.CALLTYPEID = svcT.CALLTYPEID and sct.RECID = svcT.CALLSTATUS\n\t\tleft join XAP_SVCCALLTYPETABLE callType on svcT.CALLTYPEID = callType.recid\n\t\tleft join DIRPARTYLOCATION dip on dip.PARTY = dir.RECID and dip.ISPRIMARY = 1\n\t\tleft join LOGISTICSPOSTALADDRESS lpa on lpa.LOCATION = dip.LOCATION and lpa.VALIDTO > getdate()\n\t\tleft join [briggs_mst].dbo.CUSTINVOICETRANS cit on cit.EQUIPMENT = eq.RECID\n\t\tLEFT JOIN [briggs_mst].dbo.inventdim invdim on invdim.INVENTDIMID = cit.INVENTDIMID\n\t\tleft join labor_cte ll on ll.PROJID = svcCte.svcid\n\t\tleft join last_status ls on ls.SvcRecId = svcT.recid\n\t\tleft join XAP_SVCCALLHISTORY svcHist on svcHist.RECID = ls.HistRecid\n\t\tleft join (select  max (pij.invoicedate) 'maxCloseDate'\n                            ,pij.svcCallid 'svcCallId'\n                            from PROJINVOICEJOUR pij \n                            group by pij.svcCallid) makereadyClose on makereadyClose.svcCallId = svcT.RECID",
+						"queryTimeout": "02:00:00",
+						"partitionOption": "None"
+					},
+					"sink": {
+						"type": "AzureSqlSink",
+						"preCopyScript": "truncate table briggs.Stage_Equipment_Pipeline_Backlog",
+						"disableMetricsCollection": false
+					},
+					"enableStaging": false,
+					"translator": {
+						"type": "TabularTranslator",
+						"mappings": [
+							{
+								"source": {
+									"name": "Branch",
+									"type": "String",
+									"physicalType": "nvarchar"
+								},
+								"sink": {
+									"name": "Branch",
+									"type": "String",
+									"physicalType": "nvarchar"
+								}
+							},
+							{
+								"source": {
+									"name": "SALESID",
+									"type": "String",
+									"physicalType": "nvarchar"
+								},
+								"sink": {
+									"name": "SALESID",
+									"type": "String",
+									"physicalType": "nvarchar"
+								}
+							},
+							{
+								"source": {
+									"name": "ACCOUNTNUM",
+									"type": "String",
+									"physicalType": "nvarchar"
+								},
+								"sink": {
+									"name": "ACCOUNTNUM",
+									"type": "String",
+									"physicalType": "nvarchar"
+								}
+							},
+							{
+								"source": {
+									"name": "NAME",
+									"type": "String",
+									"physicalType": "nvarchar"
+								},
+								"sink": {
+									"name": "NAME",
+									"type": "String",
+									"physicalType": "nvarchar"
+								}
+							},
+							{
+								"source": {
+									"name": "Equipment_id",
+									"type": "String",
+									"physicalType": "nvarchar"
+								},
+								"sink": {
+									"name": "Equipment_id",
+									"type": "String",
+									"physicalType": "nvarchar"
+								}
+							},
+							{
+								"source": {
+									"name": "INVENTSERIALID",
+									"type": "String",
+									"physicalType": "nvarchar"
+								},
+								"sink": {
+									"name": "INVENTSERIALID",
+									"type": "String",
+									"physicalType": "nvarchar"
+								}
+							},
+							{
+								"source": {
+									"name": "MANUFACTURERID",
+									"type": "String",
+									"physicalType": "nvarchar"
+								},
+								"sink": {
+									"name": "MANUFACTURERID",
+									"type": "String",
+									"physicalType": "nvarchar"
+								}
+							},
+							{
+								"source": {
+									"name": "Make",
+									"type": "String",
+									"physicalType": "nvarchar"
+								},
+								"sink": {
+									"name": "Make",
+									"type": "String",
+									"physicalType": "nvarchar"
+								}
+							},
+							{
+								"source": {
+									"name": "Model",
+									"type": "String",
+									"physicalType": "nvarchar"
+								},
+								"sink": {
+									"name": "Model",
+									"type": "String",
+									"physicalType": "nvarchar"
+								}
+							},
+							{
+								"source": {
+									"name": "ITEMID",
+									"type": "String",
+									"physicalType": "nvarchar"
+								},
+								"sink": {
+									"name": "ITEMID",
+									"type": "String",
+									"physicalType": "nvarchar"
+								}
+							},
+							{
+								"source": {
+									"name": "Fleet",
+									"type": "String",
+									"physicalType": "nvarchar"
+								},
+								"sink": {
+									"name": "Fleet",
+									"type": "String",
+									"physicalType": "nvarchar"
+								}
+							},
+							{
+								"source": {
+									"name": "Fleet2",
+									"type": "String",
+									"physicalType": "nvarchar"
+								},
+								"sink": {
+									"name": "Fleet2",
+									"type": "String",
+									"physicalType": "nvarchar"
+								}
+							},
+							{
+								"source": {
+									"name": "ORDERDATE",
+									"type": "DateTime",
+									"physicalType": "datetime"
+								},
+								"sink": {
+									"name": "ORDERDATE",
+									"type": "DateTime",
+									"physicalType": "datetime"
+								}
+							},
+							{
+								"source": {
+									"name": "ESTIMATEDRECEIPTDATE",
+									"type": "DateTime",
+									"physicalType": "datetime"
+								},
+								"sink": {
+									"name": "ESTIMATEDRECEIPTDATE",
+									"type": "DateTime",
+									"physicalType": "datetime"
+								}
+							},
+							{
+								"source": {
+									"name": "RECEIVEDDATE",
+									"type": "DateTime",
+									"physicalType": "datetime"
+								},
+								"sink": {
+									"name": "RECEIVEDDATE",
+									"type": "DateTime",
+									"physicalType": "datetime"
+								}
+							},
+							{
+								"source": {
+									"name": "DELIVERYDATE",
+									"type": "DateTime",
+									"physicalType": "datetime"
+								},
+								"sink": {
+									"name": "DELIVERYDATE",
+									"type": "DateTime",
+									"physicalType": "datetime"
+								}
+							},
+							{
+								"source": {
+									"name": "Est_Invoicedate",
+									"type": "DateTime",
+									"physicalType": "datetime"
+								},
+								"sink": {
+									"name": "Est_Invoicedate",
+									"type": "DateTime",
+									"physicalType": "datetime"
+								}
+							},
+							{
+								"source": {
+									"name": "Est_Invoicedate_Salesperson",
+									"type": "DateTime",
+									"physicalType": "datetime"
+								},
+								"sink": {
+									"name": "Est_Invoicedate_Salesperson",
+									"type": "DateTime",
+									"physicalType": "datetime"
+								}
+							},
+							{
+								"source": {
+									"name": "Est_Invoicedate_GJ",
+									"type": "DateTime",
+									"physicalType": "datetime"
+								},
+								"sink": {
+									"name": "Est_Invoicedate_GJ",
+									"type": "DateTime",
+									"physicalType": "datetime"
+								}
+							},
+							{
+								"source": {
+									"name": "Sales_Person1",
+									"type": "String",
+									"physicalType": "nvarchar"
+								},
+								"sink": {
+									"name": "Sales_Person1",
+									"type": "String",
+									"physicalType": "nvarchar"
+								}
+							},
+							{
+								"source": {
+									"name": "Sales_Person2",
+									"type": "String",
+									"physicalType": "nvarchar"
+								},
+								"sink": {
+									"name": "Sales_Person2",
+									"type": "String",
+									"physicalType": "nvarchar"
+								}
+							},
+							{
+								"source": {
+									"name": "PurchPrice",
+									"type": "Decimal",
+									"physicalType": "decimal",
+									"scale": 2,
+									"precision": 10
+								},
+								"sink": {
+									"name": "PurchPrice",
+									"type": "Decimal",
+									"physicalType": "decimal",
+									"scale": 2,
+									"precision": 10
+								}
+							},
+							{
+								"source": {
+									"name": "NewPrice",
+									"type": "Decimal",
+									"physicalType": "decimal",
+									"scale": 2,
+									"precision": 10
+								},
+								"sink": {
+									"name": "NewPrice",
+									"type": "Decimal",
+									"physicalType": "decimal",
+									"scale": 2,
+									"precision": 10
+								}
+							},
+							{
+								"source": {
+									"name": "GP",
+									"type": "Decimal",
+									"physicalType": "decimal",
+									"scale": 2,
+									"precision": 10
+								},
+								"sink": {
+									"name": "GP",
+									"type": "Decimal",
+									"physicalType": "decimal",
+									"scale": 2,
+									"precision": 10
+								}
+							},
+							{
+								"source": {
+									"name": "Commission_%",
+									"type": "String",
+									"physicalType": "varchar"
+								},
+								"sink": {
+									"name": "Commission_%",
+									"type": "String",
+									"physicalType": "varchar"
+								}
+							},
+							{
+								"source": {
+									"name": "Commission_Payment",
+									"type": "Decimal",
+									"physicalType": "decimal",
+									"scale": 2,
+									"precision": 10
+								},
+								"sink": {
+									"name": "Commission_Payment",
+									"type": "Decimal",
+									"physicalType": "decimal",
+									"scale": 2,
+									"precision": 10
+								}
+							},
+							{
+								"source": {
+									"name": "svcid",
+									"type": "String",
+									"physicalType": "nvarchar"
+								},
+								"sink": {
+									"name": "svcid",
+									"type": "String",
+									"physicalType": "nvarchar"
+								}
+							},
+							{
+								"source": {
+									"name": "CALLSTATUSID",
+									"type": "String",
+									"physicalType": "nvarchar"
+								},
+								"sink": {
+									"name": "CALLSTATUSID",
+									"type": "String",
+									"physicalType": "nvarchar"
+								}
+							},
+							{
+								"source": {
+									"name": "CALLTYPEID",
+									"type": "String",
+									"physicalType": "nvarchar"
+								},
+								"sink": {
+									"name": "CALLTYPEID",
+									"type": "String",
+									"physicalType": "nvarchar"
+								}
+							},
+							{
+								"source": {
+									"name": "Note",
+									"type": "String",
+									"physicalType": "nvarchar"
+								},
+								"sink": {
+									"name": "Note",
+									"type": "String",
+									"physicalType": "nvarchar"
+								}
+							},
+							{
+								"source": {
+									"name": "zip",
+									"type": "String",
+									"physicalType": "nvarchar"
+								},
+								"sink": {
+									"name": "zip",
+									"type": "String",
+									"physicalType": "nvarchar"
+								}
+							},
+							{
+								"source": {
+									"name": "ADDRESS",
+									"type": "String",
+									"physicalType": "nvarchar"
+								},
+								"sink": {
+									"name": "ADDRESS",
+									"type": "String",
+									"physicalType": "nvarchar"
+								}
+							},
+							{
+								"source": {
+									"name": "EXTERNALREFERENCE",
+									"type": "String",
+									"physicalType": "nvarchar"
+								},
+								"sink": {
+									"name": "EXTERNALREFERENCE",
+									"type": "String",
+									"physicalType": "nvarchar"
+								}
+							},
+							{
+								"source": {
+									"name": "BookingMonth",
+									"type": "Int32",
+									"physicalType": "int"
+								},
+								"sink": {
+									"name": "BookingMonth",
+									"type": "Int32",
+									"physicalType": "int"
+								}
+							},
+							{
+								"source": {
+									"name": "BookingYear",
+									"type": "Int32",
+									"physicalType": "int"
+								},
+								"sink": {
+									"name": "BookingYear",
+									"type": "Int32",
+									"physicalType": "int"
+								}
+							},
+							{
+								"source": {
+									"name": "BookingQuarter",
+									"type": "Int32",
+									"physicalType": "int"
+								},
+								"sink": {
+									"name": "BookingQuarter",
+									"type": "Int32",
+									"physicalType": "int"
+								}
+							},
+							{
+								"source": {
+									"name": "mindate",
+									"type": "DateTime",
+									"physicalType": "datetime"
+								},
+								"sink": {
+									"name": "mindate",
+									"type": "DateTime",
+									"physicalType": "datetime"
+								}
+							},
+							{
+								"source": {
+									"name": "maxdate",
+									"type": "DateTime",
+									"physicalType": "datetime"
+								},
+								"sink": {
+									"name": "maxdate",
+									"type": "DateTime",
+									"physicalType": "datetime"
+								}
+							},
+							{
+								"source": {
+									"name": "maxCloseDate",
+									"type": "DateTime",
+									"physicalType": "datetime"
+								},
+								"sink": {
+									"name": "maxCloseDate",
+									"type": "DateTime",
+									"physicalType": "datetime"
+								}
+							},
+							{
+								"source": {
+									"name": "createddatetime",
+									"type": "DateTime",
+									"physicalType": "datetime"
+								},
+								"sink": {
+									"name": "createddatetime",
+									"type": "DateTime",
+									"physicalType": "datetime"
+								}
+							},
+							{
+								"source": {
+									"name": "Last Status Change",
+									"type": "DateTime",
+									"physicalType": "datetime"
+								},
+								"sink": {
+									"name": "Last Status Change",
+									"type": "DateTime",
+									"physicalType": "datetime"
+								}
+							},
+							{
+								"source": {
+									"name": "InvoiceName",
+									"type": "String",
+									"physicalType": "nvarchar"
+								},
+								"sink": {
+									"name": "InvoiceName",
+									"type": "String",
+									"physicalType": "nvarchar"
+								}
+							},
+							{
+								"source": {
+									"name": "InvoiceNum",
+									"type": "String",
+									"physicalType": "nvarchar"
+								},
+								"sink": {
+									"name": "InvoiceNum",
+									"type": "String",
+									"physicalType": "nvarchar"
+								}
+							},
+							{
+								"source": {
+									"name": "fleettype",
+									"type": "Int32",
+									"physicalType": "int"
+								},
+								"sink": {
+									"name": "fleettype",
+									"type": "Int32",
+									"physicalType": "int"
+								}
+							},
+							{
+								"source": {
+									"name": "ORDERCLASSID",
+									"type": "String",
+									"physicalType": "nvarchar"
+								},
+								"sink": {
+									"name": "ORDERCLASSID",
+									"type": "String",
+									"physicalType": "nvarchar"
+								}
+							},
+							{
+								"source": {
+									"name": "SALESSTATUS",
+									"type": "Int32",
+									"physicalType": "int"
+								},
+								"sink": {
+									"name": "SALESSTATUS",
+									"type": "Int32",
+									"physicalType": "int"
+								}
+							},
+							{
+								"source": {
+									"name": "DATAAREAID",
+									"type": "String",
+									"physicalType": "nvarchar"
+								},
+								"sink": {
+									"name": "DATAAREAID",
+									"type": "String",
+									"physicalType": "nvarchar"
+								}
+							},
+							{
+								"source": {
+									"name": "PARTITION",
+									"type": "Int64",
+									"physicalType": "bigint"
+								},
+								"sink": {
+									"name": "PARTITION",
+									"type": "Int64",
+									"physicalType": "bigint"
+								}
+							},
+							{
+								"source": {
+									"name": "custgroup",
+									"type": "String",
+									"physicalType": "nvarchar"
+								},
+								"sink": {
+									"name": "custgroup",
+									"type": "String",
+									"physicalType": "nvarchar"
+								}
+							}
+						],
+						"typeConversion": true,
+						"typeConversionSettings": {
+							"allowDataTruncation": true,
+							"treatBooleanAsNumber": false
+						}
+					}
+				},
+				"inputs": [
+					{
+						"referenceName": "Briggs_MST",
+						"type": "DatasetReference"
+					}
+				],
+				"outputs": [
+					{
+						"referenceName": "Briggs_MDW",
+						"type": "DatasetReference",
+						"parameters": {
+							"schema_name": "Briggs",
+							"table_name": "Stage_Equipment_Pipeline_Backlog"
+						}
+					}
+				]
+			},
+			{
+				"name": "Stage_Equipment_On_Rent",
+				"type": "Copy",
+				"dependsOn": [],
+				"policy": {
+					"timeout": "7.00:00:00",
+					"retry": 0,
+					"retryIntervalInSeconds": 30,
+					"secureOutput": false,
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"source": {
+						"type": "SqlServerSource",
+						"sqlReaderQuery": "select * from briggsax.dbo.Briggs_ReportEqOnRentBySalesPerson ",
+						"queryTimeout": "02:00:00",
+						"partitionOption": "None"
+					},
+					"sink": {
+						"type": "AzureSqlSink",
+						"preCopyScript": "truncate table briggs.Stage_Equipment_On_Rent",
+						"disableMetricsCollection": false
+					},
+					"enableStaging": false,
+					"translator": {
+						"type": "TabularTranslator",
+						"mappings": [
+							{
+								"source": {
+									"name": "RENTALID",
+									"type": "String",
+									"physicalType": "nvarchar"
+								},
+								"sink": {
+									"name": "RENTALID",
+									"type": "String",
+									"physicalType": "String"
+								}
+							},
+							{
+								"source": {
+									"name": "CUSTOMERPO",
+									"type": "String",
+									"physicalType": "nvarchar"
+								},
+								"sink": {
+									"name": "CUSTOMERPO",
+									"type": "String",
+									"physicalType": "String"
+								}
+							},
+							{
+								"source": {
+									"name": "CONTRACTSTATUS",
+									"type": "Int32",
+									"physicalType": "int"
+								},
+								"sink": {
+									"name": "CONTRACTSTATUS",
+									"type": "Int32",
+									"physicalType": "Int32"
+								}
+							},
+							{
+								"source": {
+									"name": "CONTRACT_STATUS_DESC",
+									"type": "String",
+									"physicalType": "varchar"
+								},
+								"sink": {
+									"name": "CONTRACT_STATUS_DESC",
+									"type": "String",
+									"physicalType": "String"
+								}
+							},
+							{
+								"source": {
+									"name": "SALESPERSONNAME",
+									"type": "String",
+									"physicalType": "nvarchar"
+								},
+								"sink": {
+									"name": "SALESPERSONNAME",
+									"type": "String",
+									"physicalType": "String"
+								}
+							},
+							{
+								"source": {
+									"name": "SALESMANCODE",
+									"type": "String",
+									"physicalType": "nvarchar"
+								},
+								"sink": {
+									"name": "SALESMANCODE",
+									"type": "String",
+									"physicalType": "String"
+								}
+							},
+							{
+								"source": {
+									"name": "NO_OF_UNITS_PER_SALESPERSON",
+									"type": "Int32",
+									"physicalType": "int"
+								},
+								"sink": {
+									"name": "NO_OF_UNITS_PER_SALESPERSON",
+									"type": "Int32",
+									"physicalType": "Int32"
+								}
+							},
+							{
+								"source": {
+									"name": "INVOICING_DATE",
+									"type": "DateTime",
+									"physicalType": "datetime"
+								},
+								"sink": {
+									"name": "INVOICING_DATE",
+									"type": "DateTime",
+									"physicalType": "DateTime"
+								}
+							},
+							{
+								"source": {
+									"name": "startdatetime",
+									"type": "DateTime",
+									"physicalType": "datetime"
+								},
+								"sink": {
+									"name": "startdatetime",
+									"type": "DateTime",
+									"physicalType": "DateTime"
+								}
+							},
+							{
+								"source": {
+									"name": "TEMPLATELINEID",
+									"type": "String",
+									"physicalType": "nvarchar"
+								},
+								"sink": {
+									"name": "TEMPLATELINEID",
+									"type": "String",
+									"physicalType": "String"
+								}
+							},
+							{
+								"source": {
+									"name": "ADDRESS_ON_CONTRACT",
+									"type": "String",
+									"physicalType": "nvarchar"
+								},
+								"sink": {
+									"name": "ADDRESS_ON_CONTRACT",
+									"type": "String",
+									"physicalType": "String"
+								}
+							},
+							{
+								"source": {
+									"name": "City",
+									"type": "String",
+									"physicalType": "nvarchar"
+								},
+								"sink": {
+									"name": "City",
+									"type": "String",
+									"physicalType": "String"
+								}
+							},
+							{
+								"source": {
+									"name": "STATE",
+									"type": "String",
+									"physicalType": "nvarchar"
+								},
+								"sink": {
+									"name": "STATE",
+									"type": "String",
+									"physicalType": "String"
+								}
+							},
+							{
+								"source": {
+									"name": "COUNTY",
+									"type": "String",
+									"physicalType": "nvarchar"
+								},
+								"sink": {
+									"name": "COUNTY",
+									"type": "String",
+									"physicalType": "String"
+								}
+							},
+							{
+								"source": {
+									"name": "ZIPCODE",
+									"type": "String",
+									"physicalType": "nvarchar"
+								},
+								"sink": {
+									"name": "ZIPCODE",
+									"type": "String",
+									"physicalType": "String"
+								}
+							},
+							{
+								"source": {
+									"name": "EQUIPMENTID",
+									"type": "String",
+									"physicalType": "nvarchar"
+								},
+								"sink": {
+									"name": "EQUIPMENTID",
+									"type": "String",
+									"physicalType": "String"
+								}
+							},
+							{
+								"source": {
+									"name": "INVENTSERIALID",
+									"type": "String",
+									"physicalType": "nvarchar"
+								},
+								"sink": {
+									"name": "INVENTSERIALID",
+									"type": "String",
+									"physicalType": "String"
+								}
+							},
+							{
+								"source": {
+									"name": "make",
+									"type": "String",
+									"physicalType": "nvarchar"
+								},
+								"sink": {
+									"name": "make",
+									"type": "String",
+									"physicalType": "String"
+								}
+							},
+							{
+								"source": {
+									"name": "model",
+									"type": "String",
+									"physicalType": "nvarchar"
+								},
+								"sink": {
+									"name": "model",
+									"type": "String",
+									"physicalType": "String"
+								}
+							},
+							{
+								"source": {
+									"name": "MACHINEMANUFACTUREYEAR",
+									"type": "Int32",
+									"physicalType": "int"
+								},
+								"sink": {
+									"name": "MACHINEMANUFACTUREYEAR",
+									"type": "Int32",
+									"physicalType": "Int32"
+								}
+							},
+							{
+								"source": {
+									"name": "ORDERACCOUNTNAME",
+									"type": "String",
+									"physicalType": "nvarchar"
+								},
+								"sink": {
+									"name": "ORDERACCOUNTNAME",
+									"type": "String",
+									"physicalType": "String"
+								}
+							},
+							{
+								"source": {
+									"name": "INVOICEACCOUNTNAME",
+									"type": "String",
+									"physicalType": "nvarchar"
+								},
+								"sink": {
+									"name": "INVOICEACCOUNTNAME",
+									"type": "String",
+									"physicalType": "String"
+								}
+							},
+							{
+								"source": {
+									"name": "inventlocation",
+									"type": "String",
+									"physicalType": "nvarchar"
+								},
+								"sink": {
+									"name": "inventlocation",
+									"type": "String",
+									"physicalType": "String"
+								}
+							},
+							{
+								"source": {
+									"name": "ORDERACCOUNT",
+									"type": "String",
+									"physicalType": "nvarchar"
+								},
+								"sink": {
+									"name": "ORDERACCOUNT",
+									"type": "String",
+									"physicalType": "String"
+								}
+							},
+							{
+								"source": {
+									"name": "INVOICEACCOUNT",
+									"type": "String",
+									"physicalType": "nvarchar"
+								},
+								"sink": {
+									"name": "INVOICEACCOUNT",
+									"type": "String",
+									"physicalType": "String"
+								}
+							},
+							{
+								"source": {
+									"name": "INVOICEFROM",
+									"type": "DateTime",
+									"physicalType": "datetime"
+								},
+								"sink": {
+									"name": "INVOICEFROM",
+									"type": "DateTime",
+									"physicalType": "DateTime"
+								}
+							},
+							{
+								"source": {
+									"name": "INVOICEUNTIL",
+									"type": "DateTime",
+									"physicalType": "datetime"
+								},
+								"sink": {
+									"name": "INVOICEUNTIL",
+									"type": "DateTime",
+									"physicalType": "DateTime"
+								}
+							},
+							{
+								"source": {
+									"name": "CALLOFFDATE",
+									"type": "DateTime",
+									"physicalType": "datetime"
+								},
+								"sink": {
+									"name": "CALLOFFDATE",
+									"type": "DateTime",
+									"physicalType": "DateTime"
+								}
+							},
+							{
+								"source": {
+									"name": "DailyAmount",
+									"type": "Decimal",
+									"physicalType": "decimal",
+									"scale": 16,
+									"precision": 32
+								},
+								"sink": {
+									"name": "DailyAmount",
+									"type": "Decimal",
+									"physicalType": "Decimal"
+								}
+							},
+							{
+								"source": {
+									"name": "MonthlyAmount",
+									"type": "Decimal",
+									"physicalType": "decimal",
+									"scale": 16,
+									"precision": 32
+								},
+								"sink": {
+									"name": "MonthlyAmount",
+									"type": "Decimal",
+									"physicalType": "Decimal"
+								}
+							},
+							{
+								"source": {
+									"name": "MonthCalAmount",
+									"type": "Decimal",
+									"physicalType": "decimal",
+									"scale": 16,
+									"precision": 32
+								},
+								"sink": {
+									"name": "MonthCalAmount",
+									"type": "Decimal",
+									"physicalType": "Decimal"
+								}
+							},
+							{
+								"source": {
+									"name": "WeeklyAmount",
+									"type": "Decimal",
+									"physicalType": "decimal",
+									"scale": 16,
+									"precision": 32
+								},
+								"sink": {
+									"name": "WeeklyAmount",
+									"type": "Decimal",
+									"physicalType": "Decimal"
+								}
+							},
+							{
+								"source": {
+									"name": "OvertimeAmount",
+									"type": "Decimal",
+									"physicalType": "decimal",
+									"scale": 16,
+									"precision": 32
+								},
+								"sink": {
+									"name": "OvertimeAmount",
+									"type": "Decimal",
+									"physicalType": "Decimal"
+								}
+							},
+							{
+								"source": {
+									"name": "SupplementalAmount",
+									"type": "Decimal",
+									"physicalType": "decimal",
+									"scale": 16,
+									"precision": 32
+								},
+								"sink": {
+									"name": "SupplementalAmount",
+									"type": "Decimal",
+									"physicalType": "Decimal"
+								}
+							},
+							{
+								"source": {
+									"name": "OWNING_BRANCH",
+									"type": "String",
+									"physicalType": "nvarchar"
+								},
+								"sink": {
+									"name": "OWNING_BRANCH",
+									"type": "String",
+									"physicalType": "String"
+								}
+							},
+							{
+								"source": {
+									"name": "FINANCIALDIMENSIONBRANCH",
+									"type": "String",
+									"physicalType": "nvarchar"
+								},
+								"sink": {
+									"name": "FINANCIALDIMENSIONBRANCH",
+									"type": "String",
+									"physicalType": "String"
+								}
+							},
+							{
+								"source": {
+									"name": "fleettype",
+									"type": "String",
+									"physicalType": "nvarchar"
+								},
+								"sink": {
+									"name": "fleettype",
+									"type": "String",
+									"physicalType": "String"
+								}
+							},
+							{
+								"source": {
+									"name": "DaysSinceLastPm",
+									"type": "Int32",
+									"physicalType": "int"
+								},
+								"sink": {
+									"name": "DaysSinceLastPm",
+									"type": "Int32",
+									"physicalType": "Int32"
+								}
+							}
+						],
+						"typeConversion": true,
+						"typeConversionSettings": {
+							"allowDataTruncation": true,
+							"treatBooleanAsNumber": false
+						}
+					}
+				},
+				"inputs": [
+					{
+						"referenceName": "Briggs_MST",
+						"type": "DatasetReference"
+					}
+				],
+				"outputs": [
+					{
+						"referenceName": "Briggs_MDW",
+						"type": "DatasetReference",
+						"parameters": {
+							"schema_name": "Briggs",
+							"table_name": "Stage_Equipment_On_Rent"
+						}
+					}
+				]
+			}
+		],
+		"folder": {
+			"name": "Briggs Data Load Theme wise"
+		},
+		"annotations": [],
+		"lastPublishTime": "2022-02-15T07:14:48Z"
+	},
+	"type": "Microsoft.Synapse/workspaces/pipelines"
+}

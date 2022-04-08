@@ -1,0 +1,2097 @@
+{
+	"name": "PL_Load_Dimension_Stage_Tables",
+	"properties": {
+		"activities": [
+			{
+				"name": "Dim_Branch_v2",
+				"type": "Copy",
+				"dependsOn": [],
+				"policy": {
+					"timeout": "7.00:00:00",
+					"retry": 0,
+					"retryIntervalInSeconds": 30,
+					"secureOutput": false,
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"source": {
+						"type": "SqlServerSource",
+						"sqlReaderQuery": "with p_addr_newest as(\n  select \n    ddv.displayvalue, \n    max(la.recid) 'max_loc' \n  from \n    [briggs_mst].dbo.inventlocationlogisticslocationprimary ilv \n    left join briggs_mst.dbo.logisticspostaladdressview lpa on ilv.location = lpa.location \n    inner join briggs_mst.dbo.logisticslocation la on la.recid = lpa.location \n    left join briggs_mst.dbo.inventlocation i on i.recid = ilv.inventlocation \n    left join briggs_mst.dbo.defaultdimensionview ddv on ddv.defaultdimension = i.defaultdimension \n    and ddv.dimensionattributeid = 5637145333 \n  where \n    lpa.validto >= getdate() \n    and i.inventsiteid = 'PARTS' \n    and i.inventlocationid LIKE 'P%' \n    and i.name not like '%DO NOT USE%' \n  group by \n    ddv.displayvalue\n), \np_addr as(\n  select \n    distinct ddv.displayvalue 'branch_id', \n    right(ddv.displayvalue, 2) 'branch_id_short', \n    lpa.street, \n    lpa.zipcode, \n    lpa.city, \n    lpa.state, \n    lv.isocode, \n    lpa.countryregionid, \n    lv.countrycurrencycode, \n    lpa.address, \n    il.inventlocationid, \n    lpa.timezone 'time_zone_id' \n  from \n    [briggs_mst].dbo.inventlocation il \n    inner join [briggs_mst].dbo.inventlocationlogisticslocationprimary a on il.recid = a.inventlocation \n    left join briggs_mst.dbo.logisticspostaladdressview lv on lv.location = a.location \n    and lv.validto >= getdate() \n    left join briggs_mst.dbo.defaultdimensionview ddv on ddv.defaultdimension = il.defaultdimension \n    and ddv.dimensionattributeid = 5637145333 \n    left join briggs_mst.dbo.logisticspostaladdress lpa on lpa.location = lv.location \n    and lpa.validto >= getdate() \n    inner join briggs_mst.dbo.logisticslocation la on la.recid = lpa.location \n    inner join p_addr_newest pn on pn.displayvalue = ddv.displayvalue \n    and pn.max_loc = la.recid \n  where \n    il.INVENTSITEID = 'PARTS' \n    AND il.INVENTLOCATIONID LIKE 'P%'\n) \nselect \n  distinct br.[value] 'branch_id' ----\n  , \n  dir.[name] 'branch_name' -----\n  , \n  isnull(\n    isnull(p_addr.address, pc.address), \n    'Unknown'\n  ) 'address' ---\n  , \n  isnull(\n    isnull(p_addr.street, pc.street), \n    'Unknown'\n  ) 'street' ---\n  , \n  isnull(\n    isnull(p_addr.city, pc.city), \n    'Unknown'\n  ) 'city' ---\n  , \n  isnull(\n    isnull(p_addr.state, pc.state), \n    'Unknown'\n  ) 'state' ----\n  , \n  isnull(\n    cast(\n      isnull(p_addr.zipcode, pc.zipcode) as varchar(20)\n    ), \n    'Unknown'\n  ) 'zipcode' ----\nfrom \n  [briggs_mst].[dbo].[dimattributeomcostcenter] br \n  left join briggs_mst.dbo.omoperatingunitview om on om.recid = br.[recid] \n  left join briggs_mst.dbo.dirpartytable dir on dir.partynumber = om.partynumber \n  left join p_addr on p_addr.branch_id = br.[value] \n  left join p_addr pc on pc.branch_id_short = right(br.[value], 2)",
+						"queryTimeout": "02:00:00",
+						"partitionOption": "None"
+					},
+					"sink": {
+						"type": "AzureSqlSink",
+						"preCopyScript": "truncate table Briggs.Stage_Dim_Branch",
+						"disableMetricsCollection": false
+					},
+					"enableStaging": false,
+					"translator": {
+						"type": "TabularTranslator",
+						"mappings": [
+							{
+								"source": {
+									"name": "branch_id",
+									"type": "String",
+									"physicalType": "nvarchar"
+								},
+								"sink": {
+									"name": "branch_id",
+									"type": "String",
+									"physicalType": "nvarchar"
+								}
+							},
+							{
+								"source": {
+									"name": "branch_name",
+									"type": "String",
+									"physicalType": "nvarchar"
+								},
+								"sink": {
+									"name": "branch_name",
+									"type": "String",
+									"physicalType": "nvarchar"
+								}
+							},
+							{
+								"source": {
+									"name": "address",
+									"type": "String",
+									"physicalType": "nvarchar"
+								},
+								"sink": {
+									"name": "address",
+									"type": "String",
+									"physicalType": "nvarchar"
+								}
+							},
+							{
+								"source": {
+									"name": "street",
+									"type": "String",
+									"physicalType": "nvarchar"
+								},
+								"sink": {
+									"name": "street",
+									"type": "String",
+									"physicalType": "nvarchar"
+								}
+							},
+							{
+								"source": {
+									"name": "city",
+									"type": "String",
+									"physicalType": "nvarchar"
+								},
+								"sink": {
+									"name": "city",
+									"type": "String",
+									"physicalType": "nvarchar"
+								}
+							},
+							{
+								"source": {
+									"name": "state",
+									"type": "String",
+									"physicalType": "nvarchar"
+								},
+								"sink": {
+									"name": "state",
+									"type": "String",
+									"physicalType": "nvarchar"
+								}
+							},
+							{
+								"source": {
+									"name": "zipcode",
+									"type": "String",
+									"physicalType": "varchar"
+								},
+								"sink": {
+									"name": "zipcode",
+									"type": "String",
+									"physicalType": "varchar"
+								}
+							}
+						],
+						"typeConversion": true,
+						"typeConversionSettings": {
+							"allowDataTruncation": true,
+							"treatBooleanAsNumber": false
+						}
+					}
+				},
+				"inputs": [
+					{
+						"referenceName": "DS_BriggsAX",
+						"type": "DatasetReference"
+					}
+				],
+				"outputs": [
+					{
+						"referenceName": "Briggs_MDW",
+						"type": "DatasetReference",
+						"parameters": {
+							"schema_name": "Briggs",
+							"table_name": "Stage_Dim_Branch"
+						}
+					}
+				]
+			},
+			{
+				"name": "Dim_CUSTOMER",
+				"type": "Copy",
+				"dependsOn": [
+					{
+						"activity": "Dim_Branch_v2",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"policy": {
+					"timeout": "7.00:00:00",
+					"retry": 0,
+					"retryIntervalInSeconds": 30,
+					"secureOutput": false,
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"source": {
+						"type": "SqlServerSource",
+						"sqlReaderQuery": "select \n  ct.accountnum 'customer_id' ----\n  , \n  dir.name 'customer_name' ---\n  , \n  ct.accountnum + ' - ' + dir.name 'customer' ---\n  , \n  case when ct.invoiceaccount = '' then 'Bill-to' when ct.invoiceaccount <> '' then 'Ship-to' else null end 'customer_account_type' ---\n  --,isnull(cast([date_opened] as date),cast(ct.createddatetime as date)) \n  ,cast(null as date)date_account_opened----\n  , \n  rtrim(\n    ltrim(\n      case when ccg.description like 'TAA%' then ccg.description else isnull(\n        substring(\n          ccg.description, \n          charindex('-', ccg.description)+ 1, \n          len(ccg.description)\n        ), \n        'NO REP'\n      ) end\n    )\n  ) 'collections_agent' ----\n  , \n  case when ct.blocked = 0 then 'None' when ct.blocked = 3 then 'Payment' when ct.blocked = 20 then 'Stopped' when ct.blocked = 2 then 'All' else 'None' end 'account_hold_type' ---\n  , \n  cast(ct.creditmax as money) 'credit_limit' ----\n  --,isnull(sp.salesperson_name_ax,'unassigned') \n  ,'' assigned_salesperson-------\nfrom \n  briggs_mst.dbo.custtable ct \n  left join briggs_mst.dbo.dirpartytable dir on dir.recid = ct.party \n  left join briggs_mst.dbo.xap_creditcustomergroups ccg on ccg.recid = ct.creditcustomergroups",
+						"queryTimeout": "02:00:00",
+						"partitionOption": "None"
+					},
+					"sink": {
+						"type": "AzureSqlSink",
+						"preCopyScript": "truncate table Briggs.Stage_Dim_Customer",
+						"disableMetricsCollection": false
+					},
+					"enableStaging": false,
+					"translator": {
+						"type": "TabularTranslator",
+						"mappings": [
+							{
+								"source": {
+									"name": "customer_id",
+									"type": "String",
+									"physicalType": "nvarchar"
+								},
+								"sink": {
+									"name": "customer_id",
+									"type": "String",
+									"physicalType": "nvarchar"
+								}
+							},
+							{
+								"source": {
+									"name": "customer_name",
+									"type": "String",
+									"physicalType": "nvarchar"
+								},
+								"sink": {
+									"name": "customer_name",
+									"type": "String",
+									"physicalType": "nvarchar"
+								}
+							},
+							{
+								"source": {
+									"name": "customer",
+									"type": "String",
+									"physicalType": "nvarchar"
+								},
+								"sink": {
+									"name": "CUSTOMER",
+									"type": "String",
+									"physicalType": "nvarchar"
+								}
+							},
+							{
+								"source": {
+									"name": "customer_account_type",
+									"type": "String",
+									"physicalType": "varchar"
+								},
+								"sink": {
+									"name": "Customer_Account_Type",
+									"type": "String",
+									"physicalType": "varchar"
+								}
+							},
+							{
+								"source": {
+									"name": "date_account_opened",
+									"type": "DateTime",
+									"physicalType": "date"
+								},
+								"sink": {
+									"name": "Date_Account_Opened",
+									"type": "DateTime",
+									"physicalType": "date"
+								}
+							},
+							{
+								"source": {
+									"name": "collections_agent",
+									"type": "String",
+									"physicalType": "nvarchar"
+								},
+								"sink": {
+									"name": "Collections_Agent",
+									"type": "String",
+									"physicalType": "nvarchar"
+								}
+							},
+							{
+								"source": {
+									"name": "account_hold_type",
+									"type": "String",
+									"physicalType": "varchar"
+								},
+								"sink": {
+									"name": "Account_Hold_Type",
+									"type": "String",
+									"physicalType": "varchar"
+								}
+							},
+							{
+								"source": {
+									"name": "credit_limit",
+									"type": "Decimal",
+									"physicalType": "money",
+									"scale": 4,
+									"precision": 19
+								},
+								"sink": {
+									"name": "Credit_Limit",
+									"type": "Decimal",
+									"physicalType": "money",
+									"scale": 4,
+									"precision": 19
+								}
+							},
+							{
+								"source": {
+									"name": "assigned_salesperson",
+									"type": "String",
+									"physicalType": "varchar"
+								},
+								"sink": {
+									"name": "Assigned_Salesperson",
+									"type": "String",
+									"physicalType": "nvarchar"
+								}
+							}
+						],
+						"typeConversion": true,
+						"typeConversionSettings": {
+							"allowDataTruncation": true,
+							"treatBooleanAsNumber": false
+						}
+					}
+				},
+				"inputs": [
+					{
+						"referenceName": "DS_BriggsAX",
+						"type": "DatasetReference"
+					}
+				],
+				"outputs": [
+					{
+						"referenceName": "Briggs_MDW",
+						"type": "DatasetReference",
+						"parameters": {
+							"schema_name": "Briggs",
+							"table_name": "Stage_Dim_Customer"
+						}
+					}
+				]
+			},
+			{
+				"name": "Dim_Department",
+				"type": "Copy",
+				"dependsOn": [
+					{
+						"activity": "Dim_CUSTOMER",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"policy": {
+					"timeout": "7.00:00:00",
+					"retry": 0,
+					"retryIntervalInSeconds": 30,
+					"secureOutput": false,
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"source": {
+						"type": "SqlServerSource",
+						"sqlReaderQuery": "select \n  o.[omoperatingunitnumber] 'department_id', \n  replace(o.[name], ' Dept', '') 'department', \n  case when o.omoperatingunitnumber like '2%' \n  and o.omoperatingunitnumber <> '28' then 'Operations' when o.omoperatingunitnumber like '3%' \n  or o.omoperatingunitnumber = '28' then 'Sales' when o.omoperatingunitnumber like '8%' then 'Support' else 'Unknown' end 'primary_function', \n  case when o.omoperatingunitnumber = '24' then 'Sales' when o.omoperatingunitnumber = '28' then 'Operations' when o.omoperatingunitnumber = '32' then 'Support' when o.omoperatingunitnumber like '2%' then 'Operations' when o.omoperatingunitnumber like '3%' then 'Sales' when o.omoperatingunitnumber like '8%' then 'Support' else 'Unknown' end 'secondary_function', \n  isnull(dir2.name, 'No Leader') 'department_head' \nfrom \n  [briggs_mst].[dbo].[omdepartmentview] o \n  left join briggs_mst.dbo.dirpartytable dir on dir.partynumber = o.partynumber \n  left join briggs_mst.dbo.hcmworker hcm on hcm.recid = dir.hcmworker \n  left join briggs_mst.dbo.dirpartytable dir2 on dir2.recid = hcm.person \nwhere \n  o.omoperatingunitnumber <> '00'",
+						"queryTimeout": "02:00:00",
+						"partitionOption": "None"
+					},
+					"sink": {
+						"type": "AzureSqlSink",
+						"preCopyScript": "truncate table Briggs.Stage_Dim_Department",
+						"disableMetricsCollection": false
+					},
+					"enableStaging": false,
+					"translator": {
+						"type": "TabularTranslator",
+						"mappings": [
+							{
+								"source": {
+									"name": "department_id",
+									"type": "String",
+									"physicalType": "nvarchar"
+								},
+								"sink": {
+									"name": "DEPARTMENT_ID",
+									"type": "String",
+									"physicalType": "nvarchar"
+								}
+							},
+							{
+								"source": {
+									"name": "department",
+									"type": "String",
+									"physicalType": "nvarchar"
+								},
+								"sink": {
+									"name": "Department",
+									"type": "String",
+									"physicalType": "nvarchar"
+								}
+							},
+							{
+								"source": {
+									"name": "primary_function",
+									"type": "String",
+									"physicalType": "varchar"
+								},
+								"sink": {
+									"name": "Primary_Function",
+									"type": "String",
+									"physicalType": "varchar"
+								}
+							},
+							{
+								"source": {
+									"name": "secondary_function",
+									"type": "String",
+									"physicalType": "varchar"
+								},
+								"sink": {
+									"name": "Secondary_Function",
+									"type": "String",
+									"physicalType": "varchar"
+								}
+							},
+							{
+								"source": {
+									"name": "department_head",
+									"type": "String",
+									"physicalType": "nvarchar"
+								},
+								"sink": {
+									"name": "Department_Head",
+									"type": "String",
+									"physicalType": "nvarchar"
+								}
+							}
+						],
+						"typeConversion": true,
+						"typeConversionSettings": {
+							"allowDataTruncation": true,
+							"treatBooleanAsNumber": false
+						}
+					}
+				},
+				"inputs": [
+					{
+						"referenceName": "DS_BriggsAX",
+						"type": "DatasetReference"
+					}
+				],
+				"outputs": [
+					{
+						"referenceName": "Briggs_MDW",
+						"type": "DatasetReference",
+						"parameters": {
+							"schema_name": "Briggs",
+							"table_name": "Stage_Dim_Department"
+						}
+					}
+				]
+			},
+			{
+				"name": "Dim_Employee_Current",
+				"type": "Copy",
+				"dependsOn": [],
+				"policy": {
+					"timeout": "7.00:00:00",
+					"retry": 0,
+					"retryIntervalInSeconds": 30,
+					"secureOutput": false,
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"source": {
+						"type": "SqlServerSource",
+						"sqlReaderQuery": "with max_roster as(\n  select \n    max(file_date) 'last_date', \n    employee_id \n  from \n    briggsax.dbo.roster_employee \n  group by \n    employee_id\n) \nselect \n  distinct e.employee_id 'employee_id', \n  e.employee_name 'name_lfm', \n  case when e.[status] like 'Term%' then 'Terminated' when e.[Status] like 'Inact%' then 'Inactive' else e.[status] end 'employment_status', \n  isnull(db.branch, 'historical branch') 'branch_name', \n  dd.department 'department', \n  jj.categorydescription 'job_category', \n  e.[job] 'job', \n  e.last_hire_date 'last_hire_date', \n  isnull(m.Employee_Name, 'Unknown') 'supervisor_name_lfm' \nfrom \n  [briggsax].[dbo].[roster_employee] e \n  left join [briggsax].[dbo].[roster_employee] m on m.employee_id = e.supervisor_employee_id \n  and m.file_date = e.file_date \n  left join briggshr.dbo.glcodesdepartments g on cast(g.glcode as varchar) = cast(\n    e.position_ledger_code as varchar\n  ) \n  and cast(g.departmentcode as varchar) = cast(e.department as varchar) \n  left join briggshr.dbo.jobcategory jj on jj.categorycode = g.categorycode \n  inner join max_roster mm on mm.employee_id = e.employee_id \n  and mm.last_date = e.file_date \n  left join data_warehouse_tables.dbo.dim_branch db on db.branch_id = e.branch \n  left join data_warehouse_tables.dbo.dim_department dd on dd.department_id = e.department",
+						"queryTimeout": "02:00:00",
+						"partitionOption": "None"
+					},
+					"sink": {
+						"type": "AzureSqlSink",
+						"preCopyScript": "Truncate table Briggs.Stage_Dim_Employee_C",
+						"disableMetricsCollection": false
+					},
+					"enableStaging": false,
+					"translator": {
+						"type": "TabularTranslator",
+						"mappings": [
+							{
+								"source": {
+									"name": "employee_id",
+									"type": "String",
+									"physicalType": "nvarchar"
+								},
+								"sink": {
+									"name": "Employee_ID",
+									"type": "String",
+									"physicalType": "nvarchar"
+								}
+							},
+							{
+								"source": {
+									"name": "name_lfm",
+									"type": "String",
+									"physicalType": "nvarchar"
+								},
+								"sink": {
+									"name": "Name_LFM",
+									"type": "String",
+									"physicalType": "nvarchar"
+								}
+							},
+							{
+								"source": {
+									"name": "employment_status",
+									"type": "String",
+									"physicalType": "nvarchar"
+								},
+								"sink": {
+									"name": "Employment_Status",
+									"type": "String",
+									"physicalType": "nvarchar"
+								}
+							},
+							{
+								"source": {
+									"name": "branch_name",
+									"type": "String",
+									"physicalType": "nvarchar"
+								},
+								"sink": {
+									"name": "BRANCH_NAME",
+									"type": "String",
+									"physicalType": "nvarchar"
+								}
+							},
+							{
+								"source": {
+									"name": "department",
+									"type": "String",
+									"physicalType": "nvarchar"
+								},
+								"sink": {
+									"name": "Department",
+									"type": "String",
+									"physicalType": "nvarchar"
+								}
+							},
+							{
+								"source": {
+									"name": "job_category",
+									"type": "String",
+									"physicalType": "nvarchar"
+								},
+								"sink": {
+									"name": "Job_Category",
+									"type": "String",
+									"physicalType": "nvarchar"
+								}
+							},
+							{
+								"source": {
+									"name": "job",
+									"type": "String",
+									"physicalType": "nvarchar"
+								},
+								"sink": {
+									"name": "Job",
+									"type": "String",
+									"physicalType": "nvarchar"
+								}
+							},
+							{
+								"source": {
+									"name": "last_hire_date",
+									"type": "DateTime",
+									"physicalType": "date"
+								},
+								"sink": {
+									"name": "Last_Hire_Date",
+									"type": "DateTime",
+									"physicalType": "date"
+								}
+							},
+							{
+								"source": {
+									"name": "supervisor_name_lfm",
+									"type": "String",
+									"physicalType": "nvarchar"
+								},
+								"sink": {
+									"name": "Supervisor_Name_LFM",
+									"type": "String",
+									"physicalType": "nvarchar"
+								}
+							}
+						],
+						"typeConversion": true,
+						"typeConversionSettings": {
+							"allowDataTruncation": true,
+							"treatBooleanAsNumber": false
+						}
+					}
+				},
+				"inputs": [
+					{
+						"referenceName": "DS_BriggsAX",
+						"type": "DatasetReference"
+					}
+				],
+				"outputs": [
+					{
+						"referenceName": "Briggs_MDW",
+						"type": "DatasetReference",
+						"parameters": {
+							"schema_name": "Briggs",
+							"table_name": "Stage_Dim_Employee_C"
+						}
+					}
+				]
+			},
+			{
+				"name": "Dim_GL_Account",
+				"type": "Copy",
+				"dependsOn": [
+					{
+						"activity": "Dim_Employee_Current",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"policy": {
+					"timeout": "7.00:00:00",
+					"retry": 0,
+					"retryIntervalInSeconds": 30,
+					"secureOutput": false,
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"source": {
+						"type": "SqlServerSource",
+						"sqlReaderQuery": "select \n  m.recid 'sk_ledger_account_bigint', \n  m.mainaccountid 'ledger_account_id', \n  m.name 'ledger_account', \n  mc.description 'description', \n  mc.accountcategory 'account_category', \n  mc.accounttype 'account_type' \nfrom \n  briggs_mst.dbo.mainaccount m \n  left join briggs_mst.dbo.mainaccountcategory mc on mc.accountcategoryref = m.accountcategoryref",
+						"queryTimeout": "02:00:00",
+						"partitionOption": "None"
+					},
+					"sink": {
+						"type": "AzureSqlSink",
+						"preCopyScript": "Truncate table Briggs.Stage_Dim_GL_Account",
+						"disableMetricsCollection": false
+					},
+					"enableStaging": false,
+					"translator": {
+						"type": "TabularTranslator",
+						"mappings": [
+							{
+								"source": {
+									"name": "ledger_account_id",
+									"type": "String",
+									"physicalType": "nvarchar"
+								},
+								"sink": {
+									"name": "Ledger_Account_ID",
+									"type": "String",
+									"physicalType": "nvarchar"
+								}
+							},
+							{
+								"source": {
+									"name": "ledger_account",
+									"type": "String",
+									"physicalType": "nvarchar"
+								},
+								"sink": {
+									"name": "Ledger_Account",
+									"type": "String",
+									"physicalType": "nvarchar"
+								}
+							},
+							{
+								"source": {
+									"name": "description",
+									"type": "String",
+									"physicalType": "nvarchar"
+								},
+								"sink": {
+									"name": "Description",
+									"type": "String",
+									"physicalType": "nvarchar"
+								}
+							},
+							{
+								"source": {
+									"name": "account_category",
+									"type": "String",
+									"physicalType": "nvarchar"
+								},
+								"sink": {
+									"name": "Account_Category",
+									"type": "String",
+									"physicalType": "nvarchar"
+								}
+							},
+							{
+								"source": {
+									"name": "account_type",
+									"type": "Int32",
+									"physicalType": "int"
+								},
+								"sink": {
+									"name": "Account_Type",
+									"type": "Int32",
+									"physicalType": "int"
+								}
+							}
+						],
+						"typeConversion": true,
+						"typeConversionSettings": {
+							"allowDataTruncation": true,
+							"treatBooleanAsNumber": false
+						}
+					}
+				},
+				"inputs": [
+					{
+						"referenceName": "DS_BriggsAX",
+						"type": "DatasetReference"
+					}
+				],
+				"outputs": [
+					{
+						"referenceName": "Briggs_MDW",
+						"type": "DatasetReference",
+						"parameters": {
+							"schema_name": "Briggs",
+							"table_name": "Stage_Dim_GL_Account"
+						}
+					}
+				]
+			},
+			{
+				"name": "Dim_Warehouse",
+				"type": "Copy",
+				"dependsOn": [
+					{
+						"activity": "Dim_GL_Account",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"policy": {
+					"timeout": "7.00:00:00",
+					"retry": 0,
+					"retryIntervalInSeconds": 30,
+					"secureOutput": false,
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"source": {
+						"type": "SqlServerSource",
+						"sqlReaderQuery": "with p_addr as(\n  select \n    --distinct\n    il.inventlocationid, \n    street, \n    zipcode, \n    city, \n    state, \n    address \n  from \n    [briggs_mst].dbo.inventlocation il \n    left join [briggs_mst].dbo.inventlocationlogisticslocationprimary a on il.recid = a.inventlocation \n    left join logisticspostaladdressview lv on lv.location = a.location \n    and lv.validto >= getdate() \n  where \n    il.inventlocationid like 'P%'\n), \ne_addr as(\n  select \n    --distinct\n    il.inventlocationid, \n    street, \n    zipcode, \n    city, \n    state, \n    address \n  from \n    [briggs_mst].dbo.inventlocation il \n    left join [briggs_mst].dbo.inventlocationlogisticslocationprimary a on il.recid = a.inventlocation \n    left join logisticspostaladdressview lv on lv.location = a.location \n    and lv.validto >= getdate() \n  where \n    il.inventlocationid like 'E%'\n), \nwh as(\n  select \n    o.VALUE, \n    il.inventlocationid \n  from \n    inventlocation il \n    inner join defaultdimensionview ddv on ddv.defaultdimension = il.defaultdimension \n    and ddv.dimensionattributeid = 5637145333 \n    inner join dimattributeomcostcenter o on o.[value] = ddv.displayvalue\n), \nsvc_wip as(\n  select \n    svc.inventlocationid, \n    count(*) 'open' \n  from \n    cache_openservicedetails svc \n  group by \n    svc.inventlocationid\n), \nsls_wip as(\n  select \n    st.inventlocationid, \n    count(*) 'open' \n  from \n    salestable st \n  where \n    st.salesstatus = 2 \n  group by \n    st.inventlocationid\n) \nselect \n  a.inventlocationid 'warehouse_id' ---\n  , \n  case when a.inventsiteid = 'PARTS' then 'Parts - ' when a.INVENTSITEID = 'EQUIPMENT' then 'Equipment - ' end + br.NAME 'Warehouse' ----\n  , \n  a.inventsiteid 'site' ---\n  , \n  case when isnull(sls_wip.[Open], 0) + isnull(svc_wip.[Open], 0) = 0 then 'Inactive' else 'Active' end 'Transaction_Status' ---\n  , \n  br.[value] 'branch_id' ---\n  , \n  br.[name] 'branch' ---\n  , \n  isnull(\n    isnull(e.ADDRESS, p.ADDRESS), \n    'Unknown Address'\n  ) 'address' ---\n  , \n  isnull(\n    isnull(e.street, p.street), \n    'Unknown Address'\n  ) 'street' ---\n  , \n  isnull(\n    isnull(e.city, p.city), \n    'Unknown Address'\n  ) 'city' ---\n  , \n  isnull(\n    isnull(e.state, p.state), \n    'Unknown Address'\n  ) 'state' ---\n  , \n  isnull(\n    isnull(e.zipcode, p.zipcode), \n    'Unknown Address'\n  ) 'zip_code' ---\n  , \n  a.inventlocationidtransit 'transit_id' ----\nfrom \n  dimattributeomcostcenter br \n  left join wh on wh.[value] = br.[value] \n  left join inventlocation a on wh.[inventlocationid] = a.inventlocationid \n  left join e_addr e on e.inventlocationid = a.inventlocationid \n  left join p_addr p on p.inventlocationid = a.inventlocationid \n  left join svc_wip on svc_wip.inventlocationid = a.inventlocationid \n  left join sls_wip on sls_wip.inventlocationid = a.inventlocationid \nwhere \n  (\n    (a.inventlocationid like 'P%') \n    or (a.inventlocationid like 'E%')\n  )\n",
+						"queryTimeout": "02:00:00",
+						"partitionOption": "None"
+					},
+					"sink": {
+						"type": "AzureSqlSink",
+						"preCopyScript": "Truncate table Briggs.Stage_Dim_Warehouse"
+					},
+					"enableStaging": false,
+					"translator": {
+						"type": "TabularTranslator",
+						"mappings": [
+							{
+								"source": {
+									"name": "warehouse_id",
+									"type": "String",
+									"physicalType": "nvarchar"
+								},
+								"sink": {
+									"name": "Warehouse_ID",
+									"type": "String",
+									"physicalType": "nvarchar"
+								}
+							},
+							{
+								"source": {
+									"name": "Warehouse",
+									"type": "String",
+									"physicalType": "nvarchar"
+								},
+								"sink": {
+									"name": "Warehouse",
+									"type": "String",
+									"physicalType": "nvarchar"
+								}
+							},
+							{
+								"source": {
+									"name": "site",
+									"type": "String",
+									"physicalType": "nvarchar"
+								},
+								"sink": {
+									"name": "Site",
+									"type": "String",
+									"physicalType": "nvarchar"
+								}
+							},
+							{
+								"source": {
+									"name": "Transaction_Status",
+									"type": "String",
+									"physicalType": "varchar"
+								},
+								"sink": {
+									"name": "Transaction_Status",
+									"type": "String",
+									"physicalType": "varchar"
+								}
+							},
+							{
+								"source": {
+									"name": "branch_id",
+									"type": "String",
+									"physicalType": "nvarchar"
+								},
+								"sink": {
+									"name": "Branch_ID",
+									"type": "String",
+									"physicalType": "nvarchar"
+								}
+							},
+							{
+								"source": {
+									"name": "address",
+									"type": "String",
+									"physicalType": "nvarchar"
+								},
+								"sink": {
+									"name": "Address",
+									"type": "String",
+									"physicalType": "nvarchar"
+								}
+							},
+							{
+								"source": {
+									"name": "street",
+									"type": "String",
+									"physicalType": "nvarchar"
+								},
+								"sink": {
+									"name": "Street",
+									"type": "String",
+									"physicalType": "nvarchar"
+								}
+							},
+							{
+								"source": {
+									"name": "city",
+									"type": "String",
+									"physicalType": "nvarchar"
+								},
+								"sink": {
+									"name": "City",
+									"type": "String",
+									"physicalType": "nvarchar"
+								}
+							},
+							{
+								"source": {
+									"name": "state",
+									"type": "String",
+									"physicalType": "nvarchar"
+								},
+								"sink": {
+									"name": "State",
+									"type": "String",
+									"physicalType": "nvarchar"
+								}
+							},
+							{
+								"source": {
+									"name": "zip_code",
+									"type": "String",
+									"physicalType": "nvarchar"
+								},
+								"sink": {
+									"name": "Zip_Code",
+									"type": "String",
+									"physicalType": "nvarchar"
+								}
+							},
+							{
+								"source": {
+									"name": "transit_id",
+									"type": "String",
+									"physicalType": "nvarchar"
+								},
+								"sink": {
+									"name": "Transit_ID",
+									"type": "String",
+									"physicalType": "nvarchar"
+								}
+							}
+						],
+						"typeConversion": true,
+						"typeConversionSettings": {
+							"allowDataTruncation": true,
+							"treatBooleanAsNumber": false
+						}
+					}
+				},
+				"inputs": [
+					{
+						"referenceName": "Briggs_MST",
+						"type": "DatasetReference"
+					}
+				],
+				"outputs": [
+					{
+						"referenceName": "Briggs_MDW",
+						"type": "DatasetReference",
+						"parameters": {
+							"schema_name": "Briggs",
+							"table_name": "Stage_Dim_Warehouse"
+						}
+					}
+				]
+			},
+			{
+				"name": "Dim_Territory_Salesperson_Comm",
+				"type": "Copy",
+				"dependsOn": [
+					{
+						"activity": "Dim_Warehouse",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"policy": {
+					"timeout": "7.00:00:00",
+					"retry": 0,
+					"retryIntervalInSeconds": 30,
+					"secureOutput": false,
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"source": {
+						"type": "SqlServerSource",
+						"sqlReaderQuery": "select \n  distinct cs.territory 'territory_salesperson_id' ----\n  , \n  db.branch 'territory_salesperson_branch' -----\n  , \n  isnull(db2.branch, 'unknown') 'territory_salesperson_default_branch' ----\n  , \n  cs.division 'territory_salesperson_division' ---\n  , \n  cs.[type] 'territory_salesperson_plan' ----\nfrom \n  briggsax.dbo.commissions_salespeople cs \n  left join(\n    select \n      distinct br.[value] 'branch_id', \n      dir.[name] 'branch' \n    from \n      [briggs_mst].[dbo].[dimattributeomcostcenter] br \n      left join briggs_mst.dbo.omoperatingunitview om on om.recid = br.[recid] \n      left join briggs_mst.dbo.dirpartytable dir on dir.partynumber = om.partynumber\n  ) db on db.branch_id = cs.branch \n  left join (\n    select \n      distinct br.[value] 'branch_id', \n      dir.[name] 'branch' \n    from \n      [briggs_mst].[dbo].[dimattributeomcostcenter] br \n      left join briggs_mst.dbo.omoperatingunitview om on om.recid = br.[recid] \n      left join briggs_mst.dbo.dirpartytable dir on dir.partynumber = om.partynumber\n  ) db2 on db2.branch_id = cs.defaultbranch",
+						"queryTimeout": "02:00:00",
+						"partitionOption": "None"
+					},
+					"sink": {
+						"type": "AzureSqlSink",
+						"preCopyScript": "Truncate table Briggs.Stage_Dim_Territory_Salesperson",
+						"disableMetricsCollection": false
+					},
+					"enableStaging": false,
+					"translator": {
+						"type": "TabularTranslator",
+						"mappings": [
+							{
+								"source": {
+									"name": "territory_salesperson_id",
+									"type": "String",
+									"physicalType": "nvarchar"
+								},
+								"sink": {
+									"name": "Territory_Salesperson_ID",
+									"type": "String",
+									"physicalType": "nvarchar"
+								}
+							},
+							{
+								"source": {
+									"name": "territory_salesperson_branch",
+									"type": "String",
+									"physicalType": "nvarchar"
+								},
+								"sink": {
+									"name": "Territory_Salesperson_Branch",
+									"type": "String",
+									"physicalType": "nvarchar"
+								}
+							},
+							{
+								"source": {
+									"name": "territory_salesperson_default_branch",
+									"type": "String",
+									"physicalType": "nvarchar"
+								},
+								"sink": {
+									"name": "Territory_Salesperson_Default_Branch",
+									"type": "String",
+									"physicalType": "nvarchar"
+								}
+							},
+							{
+								"source": {
+									"name": "territory_salesperson_division",
+									"type": "String",
+									"physicalType": "varchar"
+								},
+								"sink": {
+									"name": "Territory_Salesperson_Division",
+									"type": "String",
+									"physicalType": "varchar"
+								}
+							},
+							{
+								"source": {
+									"name": "territory_salesperson_plan",
+									"type": "String",
+									"physicalType": "nvarchar"
+								},
+								"sink": {
+									"name": "Territory_Salesperson_Plan",
+									"type": "String",
+									"physicalType": "nvarchar"
+								}
+							}
+						],
+						"typeConversion": true,
+						"typeConversionSettings": {
+							"allowDataTruncation": true,
+							"treatBooleanAsNumber": false
+						}
+					}
+				},
+				"inputs": [
+					{
+						"referenceName": "DS_BriggsAX",
+						"type": "DatasetReference"
+					}
+				],
+				"outputs": [
+					{
+						"referenceName": "Briggs_MDW",
+						"type": "DatasetReference",
+						"parameters": {
+							"schema_name": "Briggs",
+							"table_name": "Stage_Dim_Territory_Salesperson"
+						}
+					}
+				]
+			},
+			{
+				"name": "Dim_Customer_Group",
+				"type": "Copy",
+				"dependsOn": [
+					{
+						"activity": "Dim_Department",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"policy": {
+					"timeout": "7.00:00:00",
+					"retry": 0,
+					"retryIntervalInSeconds": 30,
+					"secureOutput": false,
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"source": {
+						"type": "SqlServerSource",
+						"sqlReaderQuery": "select distinct cg.custgroup, cg.NAME 'Customer_Group'\n\n,isnull(ccg.CUSTGROUPID,'Unknown') 'Credit_Customer_Group_ID'\n,isnull(ccg.DESCRIPTION,'Unknown') 'Credit_Customer_Group_Name'\nfrom Briggs_MST.dbo.custtable ct\nleft join briggs_mst.dbo.CUSTGROUP cg on cg.CUSTGROUP = ct.CUSTGROUP\nleft join briggs_mst.dbo.XAP_CREDITCUSTOMERGROUPS ccg on ccg.recid = ct.CREDITCUSTOMERGROUPS",
+						"queryTimeout": "02:00:00",
+						"partitionOption": "None"
+					},
+					"sink": {
+						"type": "AzureSqlSink",
+						"preCopyScript": "truncate table briggs.Stage_Dim_Customer_Group",
+						"disableMetricsCollection": false
+					},
+					"enableStaging": false,
+					"translator": {
+						"type": "TabularTranslator",
+						"mappings": [
+							{
+								"source": {
+									"name": "custgroup",
+									"type": "String",
+									"physicalType": "nvarchar"
+								},
+								"sink": {
+									"name": "custgroup",
+									"type": "String",
+									"physicalType": "nvarchar"
+								}
+							},
+							{
+								"source": {
+									"name": "Customer_Group",
+									"type": "String",
+									"physicalType": "nvarchar"
+								},
+								"sink": {
+									"name": "Customer_Group",
+									"type": "String",
+									"physicalType": "nvarchar"
+								}
+							},
+							{
+								"source": {
+									"name": "Credit_Customer_Group_ID",
+									"type": "String",
+									"physicalType": "nvarchar"
+								},
+								"sink": {
+									"name": "Credit_Customer_Group_ID",
+									"type": "String",
+									"physicalType": "nvarchar"
+								}
+							},
+							{
+								"source": {
+									"name": "Credit_Customer_Group_Name",
+									"type": "String",
+									"physicalType": "nvarchar"
+								},
+								"sink": {
+									"name": "Credit_Customer_Group_Name",
+									"type": "String",
+									"physicalType": "nvarchar"
+								}
+							}
+						],
+						"typeConversion": true,
+						"typeConversionSettings": {
+							"allowDataTruncation": true,
+							"treatBooleanAsNumber": false
+						}
+					}
+				},
+				"inputs": [
+					{
+						"referenceName": "DS_BriggsAX",
+						"type": "DatasetReference"
+					}
+				],
+				"outputs": [
+					{
+						"referenceName": "Briggs_MDW",
+						"type": "DatasetReference",
+						"parameters": {
+							"schema_name": "Briggs",
+							"table_name": "Stage_Dim_Customer_Group"
+						}
+					}
+				]
+			},
+			{
+				"name": "Dim_Call_Type",
+				"type": "Copy",
+				"dependsOn": [
+					{
+						"activity": "Dim_Equipment",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"policy": {
+					"timeout": "7.00:00:00",
+					"retry": 0,
+					"retryIntervalInSeconds": 30,
+					"secureOutput": false,
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"source": {
+						"type": "SqlServerSource",
+						"sqlReaderQuery": "select \n  distinct tl.recid 'sk_call_status_bigint', \n  tt.recid 'sk_call_type_bigint', \n  tt.calltypeid 'call_type_id', \n  tl.callstatusid 'call_status_id', \n  tl.linenum 'line_num' \nfrom \n  xap_svccalltypeline tl \n  left join xap_svccalltypetable tt on tt.recid = tl.calltypeid",
+						"queryTimeout": "02:00:00",
+						"partitionOption": "None"
+					},
+					"sink": {
+						"type": "AzureSqlSink",
+						"preCopyScript": "Truncate table Briggs.Stage_Dim_CallType",
+						"disableMetricsCollection": false
+					},
+					"enableStaging": false,
+					"translator": {
+						"type": "TabularTranslator",
+						"mappings": [
+							{
+								"source": {
+									"name": "sk_call_status_bigint",
+									"type": "Int64",
+									"physicalType": "bigint"
+								},
+								"sink": {
+									"name": "SK_Call_Status_BIGINT",
+									"type": "Int64",
+									"physicalType": "bigint"
+								}
+							},
+							{
+								"source": {
+									"name": "sk_call_type_bigint",
+									"type": "Int64",
+									"physicalType": "bigint"
+								},
+								"sink": {
+									"name": "SK_Call_Type_BIGINT",
+									"type": "Int64",
+									"physicalType": "bigint"
+								}
+							},
+							{
+								"source": {
+									"name": "call_type_id",
+									"type": "String",
+									"physicalType": "nvarchar"
+								},
+								"sink": {
+									"name": "Call_Type_ID",
+									"type": "String",
+									"physicalType": "nvarchar"
+								}
+							},
+							{
+								"source": {
+									"name": "call_status_id",
+									"type": "String",
+									"physicalType": "nvarchar"
+								},
+								"sink": {
+									"name": "Call_Status_ID",
+									"type": "String",
+									"physicalType": "nvarchar"
+								}
+							},
+							{
+								"source": {
+									"name": "line_num",
+									"type": "Decimal",
+									"physicalType": "decimal",
+									"scale": 16,
+									"precision": 32
+								},
+								"sink": {
+									"name": "Line_Num",
+									"type": "Decimal",
+									"physicalType": "decimal",
+									"scale": 16,
+									"precision": 32
+								}
+							}
+						],
+						"typeConversion": true,
+						"typeConversionSettings": {
+							"allowDataTruncation": true,
+							"treatBooleanAsNumber": false
+						}
+					}
+				},
+				"inputs": [
+					{
+						"referenceName": "DS_BriggsAX",
+						"type": "DatasetReference"
+					}
+				],
+				"outputs": [
+					{
+						"referenceName": "Briggs_MDW",
+						"type": "DatasetReference",
+						"parameters": {
+							"schema_name": "Briggs",
+							"table_name": "Stage_Dim_CallType"
+						}
+					}
+				]
+			},
+			{
+				"name": "Dim_Equipment",
+				"type": "Copy",
+				"dependsOn": [
+					{
+						"activity": "Dim_Vendor",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"policy": {
+					"timeout": "7.00:00:00",
+					"retry": 0,
+					"retryIntervalInSeconds": 30,
+					"secureOutput": false,
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"source": {
+						"type": "SqlServerSource",
+						"sqlReaderQuery": "select \n  distinct eq.equipmentid, \n  eqtrans.[name][equipment name], \n  i.inventlocationid warehhouse, \n  i.wmslocationid [location], \n  eq.inventserialid serial, \n  eqmake.manufacturerid make, \n  eqtype.typeid model, \n  eqtech.machinemanufactureyear, \n  eqgroup.kindid [group], \n  case when eq.fleettype = 14 then 'Like kind exchange' \n  when eq.fleettype = 13 then '13' \n  when eq.fleettype = 12 then '12' \n  when eq.fleettype = 11 then 'Cancelled' \n  when eq.fleettype = 10 then 'Vendor' \n  when eq.fleettype = 8 then 'Re-rent' \n  when eq.fleettype = 7 then 'Used lease' \n  when eq.fleettype = 6 then 'Used rental' \n  when eq.fleettype = 5 then 'Competitive' \n  when eq.fleettype = 4 then 'Customer' \n  when eq.fleettype = 3 then 'Used' \n  when eq.fleettype = 2 then 'Lease' \n  when eq.fleettype = 1 then 'Rental' \n  when eq.fleettype = 0 then 'New' end fleettype, \n  [briggs_mst].[dbo].[enum2str](\n    'XAP_AgreementStatus', eq.agreementstatus\n  ) agrementstatus, \n  [briggs_mst].[dbo].[enum2str](\n    'XAP_PhysicalStatus', eq.physicalstatus\n  ) physicalstatus, \n  eq.itemid, \n  eqclass.classid rentalclass, \n  cast(eqfin.inventoryage as int) inventoryage, \n  cast(eqtrade.rentalage as int) rentalage, \n  [briggs_mst].[dbo].[enum2str]('AssetStatus', ab.status) [vm status] --into select * from #Temp\nfrom \n  [briggs_mst].dbo.xap_equipmenttable eq ----2lakh\n  left join (\n    select \n      d.inventequipmentid, \n      d.inventlocationid, \n      d.wmslocationid \n    from \n      [briggs_mst].dbo.inventdim d \n      inner join (\n        select \n          inventequipmentid, \n          max(it.RECID) 'recid' \n        from \n          [briggs_mst].dbo.inventdim id \n          inner join [briggs_mst].dbo.xap_equipmenttable eq on eq.equipmentid = inventequipmentid \n          inner join [briggs_mst].dbo.inventtrans it on it.inventdimid = id.inventdimid \n        where \n          inventlocationid not in ('JOBSITE', 'EQTRANSIT') \n          and inventsiteid = 'EQUIPMENT' \n          and it.itemid = eq.itemid \n        group by \n          inventequipmentid\n      ) f on d.inventequipmentid = f.inventequipmentid \n      inner join [briggs_mst].dbo.inventtrans e on d.inventdimid = e.inventdimid \n      and f.recid = e.recid \n    where \n      d.inventlocationid not in ('JOBSITE', 'EQTRANSIT')\n  ) i on eq.equipmentid = i.inventequipmentid \n  left join [briggs_mst].dbo.xap_equipmenttranslation eqtrans on eqtrans.equipment = eq.recid \n  left join [briggs_mst].dbo.xap_equipmenttechnicalinfo eqtech on eqtech.equipment = eq.recid \n  left join [briggs_mst].dbo.xap_machinetype eqtype on eq.machinetype = eqtype.recid \n  left join [briggs_mst].dbo.xap_machinekind eqgroup on eqgroup.recid = eqtype.machinekind \n  left join [briggs_mst].dbo.xap_equipmenttradeinfo eqtrade on eqtrade.equipment = eq.recid \n  left join [briggs_mst].dbo.xap_renclasstable eqclass on eqclass.recid = eqtrade.defaultclass \n  left join [briggs_mst].dbo.xap_equipmentfinancetable eqfin on eqfin.equipment = eq.recid \n  left join (\n    select \n      assetid, \n      recid, \n      row_number() over (\n        partition by assetid \n        order by \n          status asc, \n          recid desc\n      ) 'rn' \n    from \n      [briggs_mst].dbo.assetbook \n    where \n      status <> 4\n  ) vm_cte on vm_cte.assetid = eq.equipmentid \n  and vm_cte.rn = 1 \n  left join [briggs_mst].dbo.assetbook ab on ab.recid = vm_cte.recid \n  left join [briggs_mst].dbo.xap_machinemanufacturer eqmake on eqtype.machinemanufacturer = eqmake.recid",
+						"queryTimeout": "02:00:00",
+						"partitionOption": "None"
+					},
+					"sink": {
+						"type": "AzureSqlSink",
+						"preCopyScript": "Truncate table Briggs.Stage_Dim_Equipment",
+						"disableMetricsCollection": false
+					},
+					"enableStaging": false,
+					"translator": {
+						"type": "TabularTranslator",
+						"mappings": [
+							{
+								"source": {
+									"name": "equipmentid",
+									"type": "String",
+									"physicalType": "nvarchar"
+								},
+								"sink": {
+									"name": "equipmentid",
+									"type": "String",
+									"physicalType": "varchar"
+								}
+							},
+							{
+								"source": {
+									"name": "equipment name",
+									"type": "String",
+									"physicalType": "nvarchar"
+								},
+								"sink": {
+									"name": "Equipment Name",
+									"type": "String",
+									"physicalType": "nvarchar"
+								}
+							},
+							{
+								"source": {
+									"name": "warehhouse",
+									"type": "String",
+									"physicalType": "nvarchar"
+								},
+								"sink": {
+									"name": "Warehhouse",
+									"type": "String",
+									"physicalType": "varchar"
+								}
+							},
+							{
+								"source": {
+									"name": "location",
+									"type": "String",
+									"physicalType": "nvarchar"
+								},
+								"sink": {
+									"name": "location",
+									"type": "String",
+									"physicalType": "varchar"
+								}
+							},
+							{
+								"source": {
+									"name": "serial",
+									"type": "String",
+									"physicalType": "nvarchar"
+								},
+								"sink": {
+									"name": "serial",
+									"type": "String",
+									"physicalType": "varchar"
+								}
+							},
+							{
+								"source": {
+									"name": "make",
+									"type": "String",
+									"physicalType": "nvarchar"
+								},
+								"sink": {
+									"name": "make",
+									"type": "String",
+									"physicalType": "varchar"
+								}
+							},
+							{
+								"source": {
+									"name": "model",
+									"type": "String",
+									"physicalType": "nvarchar"
+								},
+								"sink": {
+									"name": "model",
+									"type": "String",
+									"physicalType": "varchar"
+								}
+							},
+							{
+								"source": {
+									"name": "machinemanufactureyear",
+									"type": "Int32",
+									"physicalType": "int"
+								},
+								"sink": {
+									"name": "machinemanufactureyear",
+									"type": "Int32",
+									"physicalType": "int"
+								}
+							},
+							{
+								"source": {
+									"name": "group",
+									"type": "String",
+									"physicalType": "nvarchar"
+								},
+								"sink": {
+									"name": "group",
+									"type": "String",
+									"physicalType": "varchar"
+								}
+							},
+							{
+								"source": {
+									"name": "fleettype",
+									"type": "String",
+									"physicalType": "varchar"
+								},
+								"sink": {
+									"name": "fleettype",
+									"type": "String",
+									"physicalType": "varchar"
+								}
+							},
+							{
+								"source": {
+									"name": "agrementstatus",
+									"type": "String",
+									"physicalType": "varchar"
+								},
+								"sink": {
+									"name": "agrementstatus",
+									"type": "String",
+									"physicalType": "varchar"
+								}
+							},
+							{
+								"source": {
+									"name": "physicalstatus",
+									"type": "String",
+									"physicalType": "varchar"
+								},
+								"sink": {
+									"name": "PhysicalStatus",
+									"type": "String",
+									"physicalType": "varchar"
+								}
+							},
+							{
+								"source": {
+									"name": "itemid",
+									"type": "String",
+									"physicalType": "nvarchar"
+								},
+								"sink": {
+									"name": "ITEMID",
+									"type": "String",
+									"physicalType": "varchar"
+								}
+							},
+							{
+								"source": {
+									"name": "rentalclass",
+									"type": "String",
+									"physicalType": "nvarchar"
+								},
+								"sink": {
+									"name": "RentalClass",
+									"type": "String",
+									"physicalType": "varchar"
+								}
+							},
+							{
+								"source": {
+									"name": "inventoryage",
+									"type": "Int32",
+									"physicalType": "int"
+								},
+								"sink": {
+									"name": "INVENTORYAGE",
+									"type": "Int32",
+									"physicalType": "int"
+								}
+							},
+							{
+								"source": {
+									"name": "rentalage",
+									"type": "Int32",
+									"physicalType": "int"
+								},
+								"sink": {
+									"name": "RentalAge",
+									"type": "Int32",
+									"physicalType": "int"
+								}
+							},
+							{
+								"source": {
+									"name": "vm status",
+									"type": "String",
+									"physicalType": "varchar"
+								},
+								"sink": {
+									"name": "VM Status",
+									"type": "String",
+									"physicalType": "varchar"
+								}
+							}
+						],
+						"typeConversion": true,
+						"typeConversionSettings": {
+							"allowDataTruncation": true,
+							"treatBooleanAsNumber": false
+						}
+					}
+				},
+				"inputs": [
+					{
+						"referenceName": "Briggs_MST",
+						"type": "DatasetReference"
+					}
+				],
+				"outputs": [
+					{
+						"referenceName": "Briggs_MDW",
+						"type": "DatasetReference",
+						"parameters": {
+							"schema_name": "Briggs",
+							"table_name": "Stage_Dim_Equipment"
+						}
+					}
+				]
+			},
+			{
+				"name": "Dim_Vendor",
+				"type": "Copy",
+				"dependsOn": [
+					{
+						"activity": "Dim_Invoice_Account",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"policy": {
+					"timeout": "7.00:00:00",
+					"retry": 0,
+					"retryIntervalInSeconds": 30,
+					"secureOutput": false,
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"source": {
+						"type": "SqlServerSource",
+						"sqlReaderQuery": "select \n  distinct vet.accountnum vendor_account, \n  dir.name vendor_name \nfrom \n  vendtable vet \n  left join dirpartytable dir on vet.party = dir.recid \n  /*select distinct Vendor_Account,Vendor_Name from (\n  select distinct vij.INVOICEACCOUNT Vendor_Account,dir.Name Vendor_Name from VENDINVOICEJOUR vij\n  left join VENDTABLE vet on vij.INVOICEACCOUNT=vet.ACCOUNTNUM  \n  left join DIRPARTYTABLE dir on vet.PARTY = dir.recid\n  union all\n  select distinct vij.INVOICEACCOUNT Vendor_Account,dir.Name Vendor_Name from PURCHTABLE vij\n  left join VENDTABLE vet on vij.INVOICEACCOUNT=vet.ACCOUNTNUM  \n  left join DIRPARTYTABLE dir on vet.PARTY = dir.recid) a*/",
+						"queryTimeout": "02:00:00",
+						"partitionOption": "None"
+					},
+					"sink": {
+						"type": "AzureSqlSink",
+						"preCopyScript": "Truncate table briggs.Stage_Dim_Vendor",
+						"disableMetricsCollection": false
+					},
+					"enableStaging": false,
+					"translator": {
+						"type": "TabularTranslator",
+						"mappings": [
+							{
+								"source": {
+									"name": "vendor_account",
+									"type": "String",
+									"physicalType": "nvarchar"
+								},
+								"sink": {
+									"name": "Vendor_Account",
+									"type": "String",
+									"physicalType": "nvarchar"
+								}
+							},
+							{
+								"source": {
+									"name": "vendor_name",
+									"type": "String",
+									"physicalType": "nvarchar"
+								},
+								"sink": {
+									"name": "Vendor_Name",
+									"type": "String",
+									"physicalType": "nvarchar"
+								}
+							}
+						],
+						"typeConversion": true,
+						"typeConversionSettings": {
+							"allowDataTruncation": true,
+							"treatBooleanAsNumber": false
+						}
+					}
+				},
+				"inputs": [
+					{
+						"referenceName": "Briggs_MST",
+						"type": "DatasetReference"
+					}
+				],
+				"outputs": [
+					{
+						"referenceName": "Briggs_MDW",
+						"type": "DatasetReference",
+						"parameters": {
+							"schema_name": "Briggs",
+							"table_name": "Stage_Dim_Vendor"
+						}
+					}
+				]
+			},
+			{
+				"name": "Dim_Invoice_Account",
+				"type": "Copy",
+				"dependsOn": [],
+				"policy": {
+					"timeout": "7.00:00:00",
+					"retry": 0,
+					"retryIntervalInSeconds": 30,
+					"secureOutput": false,
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"source": {
+						"type": "SqlServerSource",
+						"sqlReaderQuery": "select \n  distinct cij.invoiceaccount, \n  dirinvoice.name 'invaccountname' \nfrom \n  custinvoicejour cij \n  left join custtable cusinvoice on cij.invoiceaccount = cusinvoice.accountnum \n  left join dirpartytable dirinvoice on cusinvoice.party = dirinvoice.recid \norder by \n  invoiceaccount",
+						"queryTimeout": "02:00:00",
+						"partitionOption": "None"
+					},
+					"sink": {
+						"type": "AzureSqlSink",
+						"preCopyScript": "truncate table briggs.Stage_Dim_Invoice_Acc2",
+						"disableMetricsCollection": false
+					},
+					"enableStaging": false,
+					"translator": {
+						"type": "TabularTranslator",
+						"mappings": [
+							{
+								"source": {
+									"name": "invoiceaccount",
+									"type": "String",
+									"physicalType": "nvarchar"
+								},
+								"sink": {
+									"name": "INVOICEACCOUNT",
+									"type": "String",
+									"physicalType": "nvarchar"
+								}
+							},
+							{
+								"source": {
+									"name": "invaccountname",
+									"type": "String",
+									"physicalType": "nvarchar"
+								},
+								"sink": {
+									"name": "InvAccountName",
+									"type": "String",
+									"physicalType": "nvarchar"
+								}
+							}
+						],
+						"typeConversion": true,
+						"typeConversionSettings": {
+							"allowDataTruncation": true,
+							"treatBooleanAsNumber": false
+						}
+					}
+				},
+				"inputs": [
+					{
+						"referenceName": "Briggs_MST",
+						"type": "DatasetReference"
+					}
+				],
+				"outputs": [
+					{
+						"referenceName": "Briggs_MDW",
+						"type": "DatasetReference",
+						"parameters": {
+							"schema_name": "Briggs",
+							"table_name": "Stage_Dim_Invoice_Acc2"
+						}
+					}
+				]
+			},
+			{
+				"name": "Dim_Order_Class",
+				"type": "Copy",
+				"dependsOn": [
+					{
+						"activity": "Dim_Invent_Location",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"policy": {
+					"timeout": "7.00:00:00",
+					"retry": 0,
+					"retryIntervalInSeconds": 30,
+					"secureOutput": false,
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"source": {
+						"type": "SqlServerSource",
+						"sqlReaderQuery": "  select \n  distinct orderclassid, \n  getdate() from_date, \n  getdate() todate, \n  1 isactive \nfrom \n  briggs_mst.dbo.xap_orderclass",
+						"queryTimeout": "02:00:00",
+						"partitionOption": "None"
+					},
+					"sink": {
+						"type": "AzureSqlSink",
+						"preCopyScript": "truncate table briggs.Stage_Dim_Order_Class",
+						"disableMetricsCollection": false
+					},
+					"enableStaging": false,
+					"translator": {
+						"type": "TabularTranslator",
+						"mappings": [
+							{
+								"source": {
+									"name": "orderclassid",
+									"type": "String",
+									"physicalType": "nvarchar"
+								},
+								"sink": {
+									"name": "orderclassid",
+									"type": "String",
+									"physicalType": "nvarchar"
+								}
+							},
+							{
+								"source": {
+									"name": "from_date",
+									"type": "DateTime",
+									"physicalType": "datetime"
+								},
+								"sink": {
+									"name": "from_date",
+									"type": "DateTime",
+									"physicalType": "datetime"
+								}
+							},
+							{
+								"source": {
+									"name": "todate",
+									"type": "DateTime",
+									"physicalType": "datetime"
+								},
+								"sink": {
+									"name": "todate",
+									"type": "DateTime",
+									"physicalType": "datetime"
+								}
+							},
+							{
+								"source": {
+									"name": "isactive",
+									"type": "Int32",
+									"physicalType": "int"
+								},
+								"sink": {
+									"name": "isactive",
+									"type": "Int32",
+									"physicalType": "int"
+								}
+							}
+						],
+						"typeConversion": true,
+						"typeConversionSettings": {
+							"allowDataTruncation": true,
+							"treatBooleanAsNumber": false
+						}
+					}
+				},
+				"inputs": [
+					{
+						"referenceName": "DS_BriggsAX",
+						"type": "DatasetReference"
+					}
+				],
+				"outputs": [
+					{
+						"referenceName": "Briggs_MDW",
+						"type": "DatasetReference",
+						"parameters": {
+							"schema_name": "Briggs",
+							"table_name": "Stage_Dim_Order_Class"
+						}
+					}
+				]
+			},
+			{
+				"name": "Dim_Invent_Location",
+				"type": "Copy",
+				"dependsOn": [
+					{
+						"activity": "Dim_Item",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"policy": {
+					"timeout": "7.00:00:00",
+					"retry": 0,
+					"retryIntervalInSeconds": 30,
+					"secureOutput": false,
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"source": {
+						"type": "SqlServerSource",
+						"sqlReaderQuery": "select \n  distinct inventlocationid \nfrom \n  dbo.inventlocation",
+						"queryTimeout": "02:00:00",
+						"partitionOption": "None"
+					},
+					"sink": {
+						"type": "AzureSqlSink",
+						"preCopyScript": "truncate table briggs.Stage_Dim_Invent_Location",
+						"disableMetricsCollection": false
+					},
+					"enableStaging": false,
+					"translator": {
+						"type": "TabularTranslator",
+						"mappings": [
+							{
+								"source": {
+									"name": "inventlocationid",
+									"type": "String",
+									"physicalType": "nvarchar"
+								},
+								"sink": {
+									"name": "INVENTLOCATIONID",
+									"type": "String",
+									"physicalType": "nvarchar"
+								}
+							}
+						],
+						"typeConversion": true,
+						"typeConversionSettings": {
+							"allowDataTruncation": true,
+							"treatBooleanAsNumber": false
+						}
+					}
+				},
+				"inputs": [
+					{
+						"referenceName": "Briggs_MST",
+						"type": "DatasetReference"
+					}
+				],
+				"outputs": [
+					{
+						"referenceName": "Briggs_MDW",
+						"type": "DatasetReference",
+						"parameters": {
+							"schema_name": "Briggs",
+							"table_name": "Stage_Dim_Invent_Location"
+						}
+					}
+				]
+			},
+			{
+				"name": "Dim_Item",
+				"type": "Copy",
+				"dependsOn": [
+					{
+						"activity": "Dim_Manufacturer",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"policy": {
+					"timeout": "7.00:00:00",
+					"retry": 0,
+					"retryIntervalInSeconds": 30,
+					"secureOutput": false,
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"source": {
+						"type": "SqlServerSource",
+						"sqlReaderQuery": "select \n  distinct itemid \nfrom \n  dbo.projinvoiceitem",
+						"queryTimeout": "02:00:00",
+						"partitionOption": "None"
+					},
+					"sink": {
+						"type": "AzureSqlSink",
+						"preCopyScript": "truncate table briggs.Stage_Dim_Item",
+						"disableMetricsCollection": false
+					},
+					"enableStaging": false,
+					"translator": {
+						"type": "TabularTranslator",
+						"mappings": [
+							{
+								"source": {
+									"name": "itemid",
+									"type": "String",
+									"physicalType": "nvarchar"
+								},
+								"sink": {
+									"name": "ITEMID",
+									"type": "String",
+									"physicalType": "varchar"
+								}
+							}
+						],
+						"typeConversion": true,
+						"typeConversionSettings": {
+							"allowDataTruncation": true,
+							"treatBooleanAsNumber": false
+						}
+					}
+				},
+				"inputs": [
+					{
+						"referenceName": "Briggs_MST",
+						"type": "DatasetReference"
+					}
+				],
+				"outputs": [
+					{
+						"referenceName": "Briggs_MDW",
+						"type": "DatasetReference",
+						"parameters": {
+							"schema_name": "Briggs",
+							"table_name": "Stage_Dim_Item"
+						}
+					}
+				]
+			},
+			{
+				"name": "Dim_Manufacturer",
+				"type": "Copy",
+				"dependsOn": [],
+				"policy": {
+					"timeout": "7.00:00:00",
+					"retry": 0,
+					"retryIntervalInSeconds": 30,
+					"secureOutput": false,
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"source": {
+						"type": "SqlServerSource",
+						"sqlReaderQuery": "select \n  distinct manufacturerid, \n  name \nfrom \n  dbo.xap_machinemanufacturer",
+						"queryTimeout": "02:00:00",
+						"partitionOption": "None"
+					},
+					"sink": {
+						"type": "AzureSqlSink",
+						"preCopyScript": "truncate table briggs.Stage_Dim_Manufacturer",
+						"disableMetricsCollection": false
+					},
+					"enableStaging": false,
+					"translator": {
+						"type": "TabularTranslator",
+						"mappings": [
+							{
+								"source": {
+									"name": "manufacturerid",
+									"type": "String",
+									"physicalType": "nvarchar"
+								},
+								"sink": {
+									"name": "manufacturerid",
+									"type": "String",
+									"physicalType": "nvarchar"
+								}
+							},
+							{
+								"source": {
+									"name": "name",
+									"type": "String",
+									"physicalType": "nvarchar"
+								},
+								"sink": {
+									"name": "name",
+									"type": "String",
+									"physicalType": "nvarchar"
+								}
+							}
+						],
+						"typeConversion": true,
+						"typeConversionSettings": {
+							"allowDataTruncation": true,
+							"treatBooleanAsNumber": false
+						}
+					}
+				},
+				"inputs": [
+					{
+						"referenceName": "Briggs_MST",
+						"type": "DatasetReference"
+					}
+				],
+				"outputs": [
+					{
+						"referenceName": "Briggs_MDW",
+						"type": "DatasetReference",
+						"parameters": {
+							"schema_name": "Briggs",
+							"table_name": "Stage_Dim_Manufacturer"
+						}
+					}
+				]
+			},
+			{
+				"name": "Stage_Dim_Rep_Col",
+				"type": "Copy",
+				"dependsOn": [],
+				"policy": {
+					"timeout": "7.00:00:00",
+					"retry": 0,
+					"retryIntervalInSeconds": 30,
+					"secureOutput": false,
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"source": {
+						"type": "SqlServerSource",
+						"sqlReaderQuery": "select \n  distinct isnull(description,'NO REP') rep, \n  ltrim(\n    isnull(\n      substring(\n        description, \n        charindex('-', description)+ 1, \n        len(description)\n      ), \n      'NO REP'\n    )\n  ) collector \nfrom \n  briggs_mst.dbo.xap_creditcustomergroups",
+						"queryTimeout": "02:00:00",
+						"partitionOption": "None"
+					},
+					"sink": {
+						"type": "AzureSqlSink",
+						"preCopyScript": "truncate table briggs.Stage_Dim_Rep_Col",
+						"disableMetricsCollection": false
+					},
+					"enableStaging": false,
+					"translator": {
+						"type": "TabularTranslator",
+						"mappings": [
+							{
+								"source": {
+									"name": "rep",
+									"type": "String",
+									"physicalType": "varchar"
+								},
+								"sink": {
+									"name": "rep",
+									"type": "String",
+									"physicalType": "String"
+								}
+							},
+							{
+								"source": {
+									"name": "collector",
+									"type": "String",
+									"physicalType": "varchar"
+								},
+								"sink": {
+									"name": "collector",
+									"type": "String",
+									"physicalType": "String"
+								}
+							}
+						],
+						"typeConversion": true,
+						"typeConversionSettings": {
+							"allowDataTruncation": true,
+							"treatBooleanAsNumber": false
+						}
+					}
+				},
+				"inputs": [
+					{
+						"referenceName": "DS_BriggsAX",
+						"type": "DatasetReference"
+					}
+				],
+				"outputs": [
+					{
+						"referenceName": "Briggs_MDW",
+						"type": "DatasetReference",
+						"parameters": {
+							"schema_name": "Briggs",
+							"table_name": "Stage_Dim_Rep_Col"
+						}
+					}
+				]
+			}
+		],
+		"folder": {
+			"name": "Briggs Data Load Theme wise"
+		},
+		"annotations": [],
+		"lastPublishTime": "2022-02-17T13:04:24Z"
+	},
+	"type": "Microsoft.Synapse/workspaces/pipelines"
+}

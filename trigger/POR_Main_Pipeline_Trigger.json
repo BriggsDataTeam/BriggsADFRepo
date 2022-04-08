@@ -1,0 +1,29 @@
+{
+	"name": "POR_Main_Pipeline_Trigger",
+	"properties": {
+		"annotations": [],
+		"runtimeState": "Started",
+		"pipelines": [
+			{
+				"pipelineReference": {
+					"referenceName": "PL_MASTER_LOAD_POR",
+					"type": "PipelineReference"
+				}
+			}
+		],
+		"type": "ScheduleTrigger",
+		"typeProperties": {
+			"recurrence": {
+				"frequency": "Day",
+				"interval": 1,
+				"startTime": "2022-02-07T12:00:00",
+				"timeZone": "India Standard Time",
+				"schedule": {
+					"hours": [
+						12
+					]
+				}
+			}
+		}
+	}
+}
