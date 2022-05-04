@@ -1,0 +1,16 @@
+{
+	"name": "OdbcTable1",
+	"properties": {
+		"linkedServiceName": {
+			"referenceName": "Odbc2",
+			"type": "LinkedServiceReference"
+		},
+		"annotations": [],
+		"type": "OdbcTable",
+		"schema": [],
+		"typeProperties": {
+			"tableName": "\"SIND - Data Warehouse\".\"Account\""
+		}
+	},
+	"type": "Microsoft.Synapse/workspaces/datasets"
+}

@@ -17,7 +17,7 @@
 				"typeProperties": {
 					"source": {
 						"type": "AzureSqlSource",
-						"sqlReaderQuery": "Select Distinct ID From dbo.control_table_por Where ProcessName = 'AzSQL_ADLS'  \nand EnableAction = 1  order by ID",
+						"sqlReaderQuery": "Select Distinct ID From dbo.control_table_por Where ProcessName = 'AzSQL_ADLS'  and sourcedb='POR'\nand EnableAction = 1  order by ID",
 						"queryTimeout": "02:00:00",
 						"partitionOption": "None"
 					},
@@ -237,7 +237,7 @@
 			"name": "MDP POR DataLoad"
 		},
 		"annotations": [],
-		"lastPublishTime": "2022-03-28T14:17:24Z"
+		"lastPublishTime": "2022-04-29T08:20:38Z"
 	},
 	"type": "Microsoft.Synapse/workspaces/pipelines"
 }

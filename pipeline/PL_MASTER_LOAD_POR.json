@@ -3,47 +3,11 @@
 	"properties": {
 		"activities": [
 			{
-				"name": "lkp_GetEmailDetails",
-				"type": "Lookup",
-				"dependsOn": [
-					{
-						"activity": "lkp_ExecStartAuditProc",
-						"dependencyConditions": [
-							"Succeeded"
-						]
-					}
-				],
-				"policy": {
-					"timeout": "7.00:00:00",
-					"retry": 0,
-					"retryIntervalInSeconds": 30,
-					"secureOutput": false,
-					"secureInput": false
-				},
-				"userProperties": [],
-				"typeProperties": {
-					"source": {
-						"type": "AzureSqlSource",
-						"sqlReaderQuery": "Select EmailTo\n\t, ISNULL(EmailCC,'') as EmailCC\n\t,ISNULL(EmailBCC,'') as EmailBCC\n\t,EmailSubject + '- '+Convert(varchar,Getdate(),23)+' - ' as EmailSubject\n\t,ISNULL(EmailImportance,'Normal') as EmailPriority\n\t,LogicAppUrl \nfrom EmailDetails_Table\nWhere ProcessType = 'DataLoad_POR_ADLS'",
-						"queryTimeout": "02:00:00",
-						"partitionOption": "None"
-					},
-					"dataset": {
-						"referenceName": "Briggs_MDW",
-						"type": "DatasetReference",
-						"parameters": {
-							"schema_name": "dbo",
-							"table_name": "user"
-						}
-					}
-				}
-			},
-			{
 				"name": "Exec PL_Generic_Loop",
 				"type": "ExecutePipeline",
 				"dependsOn": [
 					{
-						"activity": "lkp_GetEmailDetails",
+						"activity": "lkp_ExecStartAuditProc",
 						"dependencyConditions": [
 							"Succeeded"
 						]
@@ -65,81 +29,11 @@
 				}
 			},
 			{
-				"name": "Wb_SuccessMail",
-				"type": "WebActivity",
-				"dependsOn": [
-					{
-						"activity": "Sp_ExecSuccessAudit",
-						"dependencyConditions": [
-							"Succeeded"
-						]
-					}
-				],
-				"policy": {
-					"timeout": "7.00:00:00",
-					"retry": 0,
-					"retryIntervalInSeconds": 30,
-					"secureOutput": false,
-					"secureInput": false
-				},
-				"userProperties": [],
-				"typeProperties": {
-					"url": {
-						"value": "@activity('lkp_GetEmailDetails').output.firstRow.LogicAppUrl",
-						"type": "Expression"
-					},
-					"connectVia": {
-						"referenceName": "AutoResolveIntegrationRuntime",
-						"type": "IntegrationRuntimeReference"
-					},
-					"method": "POST",
-					"body": {
-						"value": "@concat('{\"EmailTo\":\"',activity('lkp_GetEmailDetails').output.firstRow.EmailTo,'\",\"EmailCC\":\"',activity('lkp_GetEmailDetails').output.firstRow.EmailCC,'\",\"EmailBCC\":\"',activity('lkp_GetEmailDetails').output.firstRow.EmailBCC,'\",\"EmailSubject\":\"',activity('lkp_GetEmailDetails').output.firstRow.EmailSubject,'Completed\",\"EmailPriority\":\"',activity('lkp_GetEmailDetails').output.firstRow.EmailPriority,'\",\"EmailBody\":\"Hi Team, <br/><br/> All file created successfully and process completed. <br/><br/>Regards,<br/>Data Support Team\"}')",
-						"type": "Expression"
-					}
-				}
-			},
-			{
-				"name": "Wb_FailureMail",
-				"type": "WebActivity",
-				"dependsOn": [
-					{
-						"activity": "Sp_ExecFailureAudit",
-						"dependencyConditions": [
-							"Succeeded"
-						]
-					}
-				],
-				"policy": {
-					"timeout": "7.00:00:00",
-					"retry": 0,
-					"retryIntervalInSeconds": 30,
-					"secureOutput": false,
-					"secureInput": false
-				},
-				"userProperties": [],
-				"typeProperties": {
-					"url": {
-						"value": "@activity('lkp_GetEmailDetails').output.firstRow.LogicAppUrl",
-						"type": "Expression"
-					},
-					"connectVia": {
-						"referenceName": "AutoResolveIntegrationRuntime",
-						"type": "IntegrationRuntimeReference"
-					},
-					"method": "POST",
-					"body": {
-						"value": "@concat('{\"EmailTo\":\"',activity('lkp_GetEmailDetails').output.firstRow.EmailTo,'\",\"EmailCC\":\"',activity('lkp_GetEmailDetails').output.firstRow.EmailCC,'\",\"EmailBCC\":\"',activity('lkp_GetEmailDetails').output.firstRow.EmailBCC,'\",\"EmailSubject\":\"',activity('lkp_GetEmailDetails').output.firstRow.EmailSubject,'Failed\",\"EmailPriority\":\"',activity('lkp_GetEmailDetails').output.firstRow.EmailPriority,'\",\"EmailBody\":\"Hi Team, <br/><br/> Data Load Process failed at copy activity. <br/><br/>Regards,<br/>Data Support Team\"}')",
-						"type": "Expression"
-					}
-				}
-			},
-			{
 				"name": "Sp_ExecSuccessAudit",
 				"type": "SqlServerStoredProcedure",
 				"dependsOn": [
 					{
-						"activity": "Exec PL_Generic_Loop",
+						"activity": "LOAD_POR_TEMP",
 						"dependencyConditions": [
 							"Succeeded"
 						]
@@ -194,7 +88,7 @@
 				"type": "SqlServerStoredProcedure",
 				"dependsOn": [
 					{
-						"activity": "Exec PL_Generic_Loop",
+						"activity": "LOAD_POR_TEMP",
 						"dependencyConditions": [
 							"Failed"
 						]
@@ -324,13 +218,137 @@
 						}
 					}
 				}
+			},
+			{
+				"name": "PL_POR_EXECUTIVE_STAGE_TABLES_LOAD",
+				"type": "ExecutePipeline",
+				"dependsOn": [
+					{
+						"activity": "Exec PL_Generic_Loop",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"userProperties": [],
+				"typeProperties": {
+					"pipeline": {
+						"referenceName": "PL_POR_EXECUTIVE_STAGE_TABLES_LOAD",
+						"type": "PipelineReference"
+					},
+					"waitOnCompletion": true
+				}
+			},
+			{
+				"name": "LOAD_POR_TEMP",
+				"type": "ExecutePipeline",
+				"dependsOn": [
+					{
+						"activity": "PL_POR_EXECUTIVE_STAGE_TABLES_LOAD",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"userProperties": [],
+				"typeProperties": {
+					"pipeline": {
+						"referenceName": "LOAD_POR_TEMP",
+						"type": "PipelineReference"
+					},
+					"waitOnCompletion": true
+				}
+			},
+			{
+				"name": "ErrorMail",
+				"type": "Lookup",
+				"dependsOn": [
+					{
+						"activity": "Sp_ExecFailureAudit",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"policy": {
+					"timeout": "7.00:00:00",
+					"retry": 0,
+					"retryIntervalInSeconds": 30,
+					"secureOutput": false,
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"source": {
+						"type": "AzureSqlSource",
+						"sqlReaderQuery": "select top 1 'PipelineName:- '+pipelinename+ ' ----  Status:- '+status as Details,starttime,pipelinename,auditid\n from dbo.auditlog where status not like '%Success%'  and \n format(starttime,'MM/dd/yyyy')=FORMAT (getdate(), 'MM/dd/yyyy')  and pipelinename like '%POR%'\norder by starttime desc",
+						"queryTimeout": "02:00:00",
+						"partitionOption": "None"
+					},
+					"dataset": {
+						"referenceName": "Briggs_MDW",
+						"type": "DatasetReference",
+						"parameters": {
+							"schema_name": "dbo",
+							"table_name": "user"
+						}
+					},
+					"firstRowOnly": false
+				}
+			},
+			{
+				"name": "ForEach1",
+				"type": "ForEach",
+				"dependsOn": [
+					{
+						"activity": "ErrorMail",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"userProperties": [],
+				"typeProperties": {
+					"items": {
+						"value": "@activity('ErrorMail').output.value",
+						"type": "Expression"
+					},
+					"isSequential": false,
+					"activities": [
+						{
+							"name": "Web1",
+							"type": "WebActivity",
+							"dependsOn": [],
+							"policy": {
+								"timeout": "7.00:00:00",
+								"retry": 0,
+								"retryIntervalInSeconds": 30,
+								"secureOutput": false,
+								"secureInput": false
+							},
+							"userProperties": [],
+							"typeProperties": {
+								"url": "https://prod-04.centralus.logic.azure.com:443/workflows/913be55d545848e5b804a2f7dbffcae2/triggers/manual/paths/invoke?api-version=2016-10-01&sp=%2Ftriggers%2Fmanual%2Frun&sv=1.0&sig=RqqH_4dTodfE5GN4Y2AMLk1SlD8ZAfV-IgMl8XuEegM",
+								"connectVia": {
+									"referenceName": "AutoResolveIntegrationRuntime",
+									"type": "IntegrationRuntimeReference"
+								},
+								"method": "POST",
+								"body": {
+									"value": "{\n    \"Pipeline\":\"@{pipeline().Pipeline}\",\n    \"DataFactoryName\" : \"@{pipeline().DataFactory}\",\n    \"Runid\" : \"@{pipeline().RunId}\"\n}",
+									"type": "Expression"
+								}
+							}
+						}
+					]
+				}
 			}
 		],
 		"folder": {
 			"name": "MDP POR DataLoad"
 		},
 		"annotations": [],
-		"lastPublishTime": "2022-02-15T12:42:17Z"
+		"lastPublishTime": "2022-05-02T11:07:30Z"
 	},
 	"type": "Microsoft.Synapse/workspaces/pipelines"
 }

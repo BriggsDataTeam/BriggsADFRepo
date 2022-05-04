@@ -9,7 +9,8 @@
 					{
 						"activity": "PL_Master_Dimension_Load",
 						"dependencyConditions": [
-							"Succeeded"
+							"Succeeded",
+							"Failed"
 						]
 					}
 				],
@@ -1184,13 +1185,97 @@
 						"PerformanceLevel": "DW100c"
 					}
 				}
+			},
+			{
+				"name": "ErrorMail",
+				"type": "Lookup",
+				"dependsOn": [
+					{
+						"activity": "PL_SCALE_AZURE_SQL_DW100",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"policy": {
+					"timeout": "7.00:00:00",
+					"retry": 0,
+					"retryIntervalInSeconds": 30,
+					"secureOutput": false,
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"source": {
+						"type": "AzureSqlSource",
+						"sqlReaderQuery": "select top 1 'PipelineName:- '+pipelinename+ ' ----  Status:- '+status as Details,starttime,pipelinename,auditid\n from dbo.auditlog where status not like '%Success%'  and \n format(starttime,'MM/dd/yyyy')=FORMAT (getdate(), 'MM/dd/yyyy')  and pipelinename not like '%POR%'\norder by starttime desc",
+						"queryTimeout": "02:00:00",
+						"partitionOption": "None"
+					},
+					"dataset": {
+						"referenceName": "Briggs_MDW",
+						"type": "DatasetReference",
+						"parameters": {
+							"schema_name": "dbo",
+							"table_name": "user"
+						}
+					},
+					"firstRowOnly": false
+				}
+			},
+			{
+				"name": "ForEach1",
+				"type": "ForEach",
+				"dependsOn": [
+					{
+						"activity": "ErrorMail",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"userProperties": [],
+				"typeProperties": {
+					"items": {
+						"value": "@activity('ErrorMail').output.value",
+						"type": "Expression"
+					},
+					"isSequential": false,
+					"activities": [
+						{
+							"name": "Web1",
+							"type": "WebActivity",
+							"dependsOn": [],
+							"policy": {
+								"timeout": "7.00:00:00",
+								"retry": 0,
+								"retryIntervalInSeconds": 30,
+								"secureOutput": false,
+								"secureInput": false
+							},
+							"userProperties": [],
+							"typeProperties": {
+								"url": "https://prod-13.centralus.logic.azure.com:443/workflows/e14fef5aeb97428fb0308d84982cc3f6/triggers/manual/paths/invoke?api-version=2016-10-01&sp=%2Ftriggers%2Fmanual%2Frun&sv=1.0&sig=5cJxMg50A3fDsG0iby7hSIbBQ-EV-Gv7wRqf6d2uOPY",
+								"connectVia": {
+									"referenceName": "AutoResolveIntegrationRuntime",
+									"type": "IntegrationRuntimeReference"
+								},
+								"method": "POST",
+								"body": {
+									"value": "{\n    \"Pipeline\":\"@{pipeline().Pipeline}\",\n    \"DataFactoryName\" : \"@{pipeline().DataFactory}\",\n    \"Runid\" : \"@{pipeline().RunId}\"\n}",
+									"type": "Expression"
+								}
+							}
+						}
+					]
+				}
 			}
 		],
 		"folder": {
 			"name": "Briggs Data Load Theme wise"
 		},
 		"annotations": [],
-		"lastPublishTime": "2022-04-04T12:01:16Z"
+		"lastPublishTime": "2022-05-02T06:42:59Z"
 	},
 	"type": "Microsoft.Synapse/workspaces/pipelines"
 }

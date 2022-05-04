@@ -2,7 +2,7 @@
 	"name": "POR_Stage_Table_Refresh",
 	"properties": {
 		"annotations": [],
-		"runtimeState": "Started",
+		"runtimeState": "Stopped",
 		"pipelines": [
 			{
 				"pipelineReference": {

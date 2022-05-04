@@ -24,7 +24,7 @@
 				"typeProperties": {
 					"source": {
 						"type": "AzureSqlSource",
-						"sqlReaderQuery": "select id ID_Full from dbo.control_table where sourcetablename in (\n'XAP_INVOICESCHEDULELINE',\n'XAP_SVCREPORTINGTABLE',\n'DIMENSIONATTRIBUTEVALUE',\n'DIMENSIONATTRIBUTEVALUECOMBINATION',\n'DIMENSIONATTRIBUTEVALUEGROUPCOMBINATION',\n'ECORESPRODUCTTRANSLATION',\n'XAP_NPRITEM',\n'DIMENSIONATTRIBUTELEVELVALUE'\n)",
+						"sqlReaderQuery": "select id ID_Full from dbo.control_table where sourcetablename in (\n'XAP_INVOICESCHEDULELINE',\n'XAP_SVCREPORTINGTABLE',\n'DIMENSIONATTRIBUTEVALUE',\n'DIMENSIONATTRIBUTEVALUECOMBINATION',\n'DIMENSIONATTRIBUTEVALUEGROUPCOMBINATION',\n'ECORESPRODUCTTRANSLATION',\n'XAP_NPRITEM',\n'DIMENSIONATTRIBUTELEVELVALUE',\n'BRIGGS_CURRENTINVENTORY_ALL_INVENTORY'\n) order by id",
 						"queryTimeout": "02:00:00",
 						"partitionOption": "None"
 					},
@@ -254,7 +254,7 @@
 			"name": "Briggs Data Load in Azure DataLake"
 		},
 		"annotations": [],
-		"lastPublishTime": "2022-03-21T06:12:40Z"
+		"lastPublishTime": "2022-04-20T10:39:23Z"
 	},
 	"type": "Microsoft.Synapse/workspaces/pipelines"
 }

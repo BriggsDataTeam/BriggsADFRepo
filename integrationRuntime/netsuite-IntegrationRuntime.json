@@ -1,0 +1,7 @@
+{
+	"name": "netsuite-IntegrationRuntime",
+	"properties": {
+		"type": "SelfHosted",
+		"description": "10.13.0.4"
+	}
+}

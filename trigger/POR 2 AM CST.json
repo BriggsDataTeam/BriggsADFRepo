@@ -2,11 +2,11 @@
 	"name": "POR 2 AM CST",
 	"properties": {
 		"annotations": [],
-		"runtimeState": "Started",
+		"runtimeState": "Stopped",
 		"pipelines": [
 			{
 				"pipelineReference": {
-					"referenceName": "Load_POR_TEMP",
+					"referenceName": "LOAD_POR_TEMP",
 					"type": "PipelineReference"
 				}
 			}
