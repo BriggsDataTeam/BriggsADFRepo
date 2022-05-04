@@ -1,0 +1,108 @@
+{
+	"$schema": "https://schema.management.azure.com/schemas/2015-01-01/deploymentParameters.json#",
+	"contentVersion": "1.0.0.0",
+	"parameters": {
+		"workspaceName": {
+			"value": "briggs-b-wus-syn-01"
+		},
+		"AzureSqlDatabase1_connectionString": {
+			"value": ""
+		},
+		"AzureSqlDatabase2_connectionString": {
+			"value": ""
+		},
+		"AzureSynapseAnalytics1_connectionString": {
+			"value": ""
+		},
+		"CeridianAPITest_password": {
+			"value": ""
+		},
+		"DS_MDW_SP_connectionString": {
+			"value": ""
+		},
+		"LS_ADLS_accountKey": {
+			"value": ""
+		},
+		"LS_ADLS_1_connectionString": {
+			"value": ""
+		},
+		"LS_Briggs_AX_connectionString": {
+			"value": ""
+		},
+		"LS_Briggs_BIE_DATA_WAREHOUSE_connectionString": {
+			"value": ""
+		},
+		"LS_Briggs_HR_connectionString": {
+			"value": ""
+		},
+		"LS_Briggs_MST_connectionString": {
+			"value": ""
+		},
+		"LS_Briggsmdw_MI_User_connectionString": {
+			"value": ""
+		},
+		"LS_POR_connectionString": {
+			"value": ""
+		},
+		"LS_POR99_connectionString": {
+			"value": ""
+		},
+		"NewPOR_test_connectionString": {
+			"value": ""
+		},
+		"Odbc1_connectionString": {
+			"value": ""
+		},
+		"Odbc1_password": {
+			"value": ""
+		},
+		"Odbc2_connectionString": {
+			"value": ""
+		},
+		"Odbc2_password": {
+			"value": ""
+		},
+		"SFTP_password": {
+			"value": ""
+		},
+		"briggs-b-wus-syn-01-WorkspaceDefaultSqlServer_connectionString": {
+			"value": ""
+		},
+		"briggs-p-wus-syn-01-WorkspaceDefaultSqlServer_connectionString": {
+			"value": ""
+		},
+		"CeridianAPITest_properties_typeProperties_url": {
+			"value": "https://us61e2-services.dayforcehcm.com/Api/BriggsEquipment/V1/"
+		},
+		"CeridianAPITest_properties_typeProperties_userName": {
+			"value": "ReportingUser"
+		},
+		"LS_ADLS_properties_typeProperties_url": {
+			"value": "https://briggsprdwusdls01.dfs.core.windows.net"
+		},
+		"NetSuiteDataTeamRESTAPI_properties_typeProperties_url": {
+			"value": "https://7183791.suitetalk.api.netsuite.com"
+		},
+		"NetSuiteRestAPI_properties_typeProperties_url": {
+			"value": "https://7183791.suitetalk.api.netsuite.com"
+		},
+		"Odbc1_properties_typeProperties_userName": {
+			"value": "Team-SammonsDataTeam@sammonsindustrial.com"
+		},
+		"Odbc2_properties_typeProperties_userName": {
+			"value": "Team-SammonsDataTeam@sammonsindustrial.com"
+		},
+		"SFTP_properties_typeProperties_host": {
+			"value": "demo.wftpserver.com"
+		},
+		"SFTP_properties_typeProperties_userName": {
+			"value": "demo"
+		},
+		"briggs-b-wus-syn-01-WorkspaceDefaultStorage_properties_typeProperties_url": {
+			"value": "https://briggsbetawusdls01.dfs.core.windows.net"
+		},
+		"briggs-p-wus-syn-01-WorkspaceDefaultStorage_properties_typeProperties_url": {
+			"value": "https://briggsprdwusdls01.dfs.core.windows.net"
+		}
+	}
+}
